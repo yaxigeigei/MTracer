@@ -52,6 +52,10 @@ classdef MTracerTrace < handle
             this.dataTb = tb;
         end
         
+        function obj = Duplicate(this, vmObj)
+            obj = MTracerTrace(vmObj, this.dataTb);
+        end
+        
         function delete(this)
             % 
             delete(this.hAnchor);
@@ -212,8 +216,8 @@ classdef MTracerTrace < handle
                 plotArgs = {'Color', cc(5,:), 'HitTest', 'off'};
                 this.hAnchor = plot(ax, t, y, 'o', plotArgs{:});
                 this.hInterp = plot(ax, ti, yi, '-', 'LineWidth', w, plotArgs{:});
-                this.vm.AddHandle2Layer(this.hPt, 'anchors');
-                this.vm.AddHandle2Layer(this.hTr, 'interp');
+                this.vm.AddHandle2Layer(this.hAnchor, 'anchors');
+                this.vm.AddHandle2Layer(this.hInterp, 'interp');
             else
                 set(this.hAnchor, 'XData', t, 'YData', y);
                 set(this.hInterp, 'XData', ti, 'YData', yi, 'LineWidth', w);
