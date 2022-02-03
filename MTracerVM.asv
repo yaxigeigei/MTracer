@@ -273,9 +273,6 @@ classdef MTracerVM < handle
                 this.se.SetTable('LFP', lfpTb, 'timeSeries', 0);
                 disp('LFP data loaded');
                 
-                % Extract recording ID
-                this.ExtractRecId(filePath);
-                
             catch e
                 assignin('base', 'e', e);
                 disp(e);
@@ -310,9 +307,6 @@ classdef MTracerVM < handle
                 this.rezOps = rez.ops;
                 this.se.SetTable('spikes', tb, 'timeSeries', 0);
                 disp('rez.mat data loaded');
-                
-                % Extract recording ID
-                this.ExtractRecId(filePath);
                 
             catch e
                 assignin('base', 'e', e);
@@ -371,9 +365,6 @@ classdef MTracerVM < handle
                 this.clustTb = cTb;
                 this.currentCluster = [];
                 this.PlotClusters();
-                
-                % Extract recording ID
-                this.ExtractRecId(ksDir);
                 
             catch e
                 assignin('base', 'e', e);
@@ -456,9 +447,6 @@ classdef MTracerVM < handle
                     this.traces(end+1,1) = obj;
                     this.currentTrace = numel(this.traces);
                     disp(['Loaded trace: ' obj.dispName]);
-                    
-                    % Extract recording ID
-                    this.ExtractRecId(filePaths{i});
                 catch e
                     warning('Error occured when loading: \n%s', filePaths{i});
                     disp(e);
@@ -620,18 +608,17 @@ classdef MTracerVM < handle
         function ExtractRecId(this, s)
             % Extract recording ID from a string, typically a path
             
-            % Don't overwrite existing ID
+            % Don't overwrite
             if ~strcmp(this.recId, 'NP0_B0') || isempty(s)
                 return
             end
             
-            % Extract ID
-            matches = regexp(s, 'NP\d{2,}_B\d+', 'match');
+            % 
+            matches = regexp(s, 'NP_\d{2,}B\d+', 'match');
+            
+            % 
             if ~isempty(matches)
                 this.recId = matches{1};
-                if this.hasApp
-                    this.app.RecEditField.Value = this.recId;
-                end
             end
         end
         

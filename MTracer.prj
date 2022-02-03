@@ -1,5 +1,5 @@
 <deployment-project plugin="plugin.apptool" plugin-version="1.0">
-  <configuration build-checksum="643050750" file="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\MTracer\MTracer.prj" location="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\MTracer" name="MTracer" target="target.mlapps" target-name="Package App">
+  <configuration build-checksum="4011633207" file="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\MTracer\MTracer.prj" location="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\MTracer" name="MTracer" target="target.mlapps" target-name="Package App">
     <param.appname>MTracer</param.appname>
     <param.authnamewatermark>Many Xu</param.authnamewatermark>
     <param.email>duo.xu@ucsf.edu</param.email>
@@ -8,8 +8,8 @@
     <param.icons />
     <param.summary />
     <param.description />
-    <param.screenshot>C:\Users\many\AppData\Local\Temp\tp4f0327d6_3da9_4413_9f85_adb4bc52b7b5.png</param.screenshot>
-    <param.version>1.02</param.version>
+    <param.screenshot>C:\Users\many\AppData\Local\Temp\tpc8c73d67_bffa_4aec_b969_22775ee98992.png</param.screenshot>
+    <param.version>1.1.1</param.version>
     <param.products.name />
     <param.products.id />
     <param.products.version />
@@ -37,13 +37,21 @@
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\ManyFunMatlab\Data Tool Kit\@MSessionExplorer\SliceTimeSeries.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\ManyFunMatlab\Data Tool Kit\@MSessionExplorer\UpdateOldObject.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\ManyFunMatlab\Data Tool Kit\MBrowse.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\ManyFunMatlab\Data Tool Kit\MKilosort2.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\ManyFunMatlab\Data Tool Kit\MSpikeGLX.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\ManyFunMatlab\Math Tool Kit\MMath.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\ManyFunMatlab\Math Tool Kit\MNeuro.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\ManyFunMatlab\Plotting Tool Kit\MPlot.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\cmocean.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\colorcet.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\computeTemplateSimilarity.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\computeWaveformImageCentroid.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\configureDataTipsFromUserData.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\discrete_histcounts.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\distinguishable_colors.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\getDefaultChannelMapFile.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\GetFullPath.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\getMeWtW_nomex.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\hideInLegend.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\isstringlike.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\linspecer.m</file>
@@ -51,25 +59,44 @@
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\makerow.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\makeSymLink.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\mkdirRecursive.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\phy_cluster_colors.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\plotStackedTraces.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\pmat.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\pmatbal.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\ProgressBar.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\relativepath.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\rugplot.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\seaborn_color_palette.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\setLineOpacity.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\showFirstInLegend.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\simple_rangesearch.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\TensorUtils.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\turbomap.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\+Utils\xcorrAB.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\ChannelMap.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\ClusterStabilitySummary.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\ConcatenationInfo.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\ImecDataset.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\KilosortDataset.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\KilosortMetrics.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\KilosortTrialSegmentedDataset.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\readINI.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\readNPY.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\SnippetSet.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\TimeShiftSpec.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\TrialSegmentationInfo.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\writeINI.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\neuropixel-utils\+Neuropixel\writeNPY.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\npy-matlab\npy-matlab\constructNPYheader.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\npy-matlab\npy-matlab\readNPY.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\npy-matlab\npy-matlab\readNPYheader.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\packages\NP\npy-matlab\npy-matlab\writeNPY.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\+NP\KilosortResult.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\+NP\MotionInterpolant.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\+NP\Param.m</file>
       <file>${PROJECT_ROOT}\MTracerTrace.m</file>
       <file>${PROJECT_ROOT}\MTracerVM.m</file>
+      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\supporting_files\NP1_NHP_HalfCol_kilosortChanMap.mat</file>
     </fileset.depfun>
     <fileset.resources />
     <fileset.package />
