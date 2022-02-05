@@ -96,8 +96,8 @@ classdef MTracerVM < handle
                 val = [0 this.imec.nSamplesAP] / 30e3;
             elseif this.hasLFP
                 val = [0 str2double(this.lfMeta.fileTimeSecs)];
-            elseif ~isempty(this.kr.mdat)
-                val = [0 size(this.kr.mdat.Data.V, 2)-1] / 30e3;    
+            elseif ~isempty(this.kr) && ~isempty(this.kr.mdat)
+                val = [0 size(this.kr.mdat.Data.V, 2)-1] / 30e3;
             else
                 val = [0 1e4];
             end
@@ -332,18 +332,18 @@ classdef MTracerVM < handle
             assert(this.hasChanMap, 'Channel Map must be loaded before loading ap.bin')
             
             try
-                % Create NP.KilosortResult
-                this.kr = NP.KilosortResult(ksDir, this.chanMapFile);
+                % Construct NP.KilosortResult
+                if this.hasRez
+                    this.kr = NP.KilosortResult(ksDir, this.chanMapFile, this.rezOps.tstart);
+                else
+                    warning('If sorting was performed on temporally truncated data, please load rez.mat first for the sample offset value.');
+                    this.kr = NP.KilosortResult(ksDir, this.chanMapFile);
+                end
                 this.kr.ComputeAll();
                 
                 % Gather spike data
                 spkTb = table;
-                if this.hasRez
-                    spkTb.tSpk = double(this.kr.spkTb.timeInd + this.rezOps.tstart) / this.rezOps.fs;
-                else
-                    warning('rez.mat is not available. Assuming time starts from zeros.');
-                    spkTb.tSpk = double(this.kr.spkTb.timeInd) / 30e3;
-                end
+                spkTb.tSpk = double(this.kr.spkTb.timeInd) / 30e3;
                 spkTb.ySpk = this.kr.spkTb.covCentCoords(:,2);
                 
                 % Group spikes by clusters
@@ -374,66 +374,6 @@ classdef MTracerVM < handle
                 
                 % Extract recording ID
                 this.ExtractRecId(ksDir);
-                
-            catch e
-                assignin('base', 'e', e);
-                disp(e);
-            end
-        end
-        
-        function LoadPhyOld(this, ksDir)
-            % 
-            
-            if nargin < 2 || isempty(ksDir)
-                ksDir = MBrowse.Folder([], 'Please select the Kilosort output folder');
-            end
-            if ~exist(ksDir, 'dir')
-                return
-            end
-            assert(this.hasAP, 'ap.bin must be linked before loading ap.bin')
-            
-            try
-                % Create objects
-                this.ks = Neuropixel.KilosortDataset(ksDir, 'imecDataset', this.imec);
-                this.ks.load();
-                this.ksm = this.ks.computeMetrics();
-                
-                % Gather spike data
-                spkTb = table;
-                if this.hasRez
-                    spkTb.tSpk = double(this.ksm.spike_times + this.rezOps.tstart) / this.rezOps.fs;
-                else
-                    warning('rez.mat is not available. Assuming time starts from zeros.');
-                    spkTb.tSpk = double(this.ksm.spike_times) / 30e3;
-                end
-                spkTb.ySpk = this.ksm.spike_depth;
-                
-                % Group spikes by clusters
-                c = this.ksm.spike_clusters;
-                [G, ID] = findgroups(c);
-                cTb = table;
-                for i = 1 : width(spkTb)
-                    cTb.(i) = splitapply(@(x) {x}, spkTb.(i), G);
-                end
-                cTb.Properties.VariableNames = spkTb.Properties.VariableNames;
-                cTb.id = ID;
-                cTb.group = this.ks.cluster_groups;
-                cTb.n_spikes = cellfun(@numel, cTb.tSpk);
-                cTb.amplitude = round(this.ksm.cluster_amplitude);
-                cTb.depth = round(cellfun(@(x) median(x,'omitnan'), cTb.ySpk)); % this.ksm.cluster_depth is not consistent with spike depths
-                cTb(cTb.group == 'noise', :) = [];
-                
-                % Sort rows by depth
-                cTb = sortrows(cTb, 'depth', 'descend');
-                
-                % Columns about plotting
-                cTb.color = lines(height(cTb));
-                cTb.handle{1} = [];
-                
-                this.ksFolder = ksDir;
-                this.clustTb = cTb;
-                this.currentCluster = [];
-                this.PlotClusters();
                 
             catch e
                 assignin('base', 'e', e);

@@ -1,5 +1,5 @@
 <deployment-project plugin="plugin.apptool" plugin-version="1.0">
-  <configuration build-checksum="4011633207" file="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\MTracer\MTracer.prj" location="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\MTracer" name="MTracer" target="target.mlapps" target-name="Package App">
+  <configuration build-checksum="1849389350" file="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\MTracer\MTracer.prj" location="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\MTracer" name="MTracer" target="target.mlapps" target-name="Package App">
     <param.appname>MTracer</param.appname>
     <param.authnamewatermark>Many Xu</param.authnamewatermark>
     <param.email>duo.xu@ucsf.edu</param.email>
@@ -8,8 +8,8 @@
     <param.icons />
     <param.summary />
     <param.description />
-    <param.screenshot>C:\Users\many\AppData\Local\Temp\tpc8c73d67_bffa_4aec_b969_22775ee98992.png</param.screenshot>
-    <param.version>1.1.1</param.version>
+    <param.screenshot>C:\Users\many\AppData\Local\Temp\tpa19cce22_3e24_4fcb_9eb4_8065dc5586b9.png</param.screenshot>
+    <param.version>1.1.2</param.version>
     <param.products.name />
     <param.products.id />
     <param.products.version />
