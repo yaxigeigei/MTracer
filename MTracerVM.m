@@ -1,6 +1,10 @@
 classdef MTracerVM < handle
     % 
     
+    properties(Constant)
+        cacheFolderName = 'mtracer_cache';
+    end
+    
     properties
         % UI
         app;                        % handle to app object
@@ -10,29 +14,28 @@ classdef MTracerVM < handle
         mapLayers struct = struct;  % stores plot elements in mapAxes, each field is a layer
         
         % Data
+        recId char = 'NP0_B0';
         chanMapFile = 'NP1_NHP_HalfCol_kilosortChanMap.mat'; % channel map .mat file
         channelTable table;         % channel info
         apBinFile = '';             % path of ap.bin file
         imec Neuropixel.ImecDataset; % object used to access AP data
         lfBinFile = '';             % path of lf.bin file
         lfMeta struct;              % LFP metadata loaded from lf.meta
+        
         ksFolder = '';              % path of Kilosort/Phy output folder
         rezOps struct;              % rez.ops struct
-        ks Neuropixel.KilosortDataset; % object used to access sorting results
-        ksm Neuropixel.KilosortMetrics; % object used to access sorting results
-        kr NP.KilosortResult;
+        kr NP.KilosortResult;       % object used to access sorting results
         
-        recId char = 'NP0_B0';
-        se MSessionExplorer;        % current data container, referenced to either seo or sek
+        se MSessionExplorer;        % container of voltage and raw spike data, all stored in one epoch
+        clusTb table;               % stores cluster data
+        
         traces MTracerTrace;        % trace objects
-        tracers struct;             % a list of auto tracers
-                                    % field names are tracer names
-                                    % each field saves the tracer data
+        tracers struct;             % a list of auto tracers, field names are tracer names, each field saves the tracer data
+        
         F1File = '';                % path of the saved motion scaling object
         F1;                         % movement scaling object for motion extrapolation
         F2File = '';                % path of the spatial-temporal interpolant
         F2 NP.MotionInterpolant;    % spatial-temporal interpolant for motion correction
-        clustTb table;              % stores cluster data
         
         % Runtime variables
         focus = [0 0];
@@ -40,6 +43,7 @@ classdef MTracerVM < handle
         currentTrace = NaN;
         spikeMarkerSize = 4;
         currentCluster = [];
+        apSource = 'imec.ap.bin';   % must be 'imec.ap.bin' or 'temp_wh.dat'
     end
     
     properties(Dependent)
@@ -49,7 +53,7 @@ classdef MTracerVM < handle
         hasAP;
         hasTrace;
         hasInterp2;
-        hasPhy;
+        hasClus;
         hasApp;
         hasMapAxes;
         layerNames;
@@ -68,10 +72,10 @@ classdef MTracerVM < handle
             val = ismember('LFP', this.se.tableNames);
         end
         function val = get.hasAP(this)
-            val = ismember('AP', this.se.tableNames);
+            val = ~isempty(this.imec);
         end
-        function val = get.hasPhy(this)
-            val = ~isempty(this.clustTb);
+        function val = get.hasClus(this)
+            val = ~isempty(this.kr) && ~isempty(this.kr.mdat);
         end
         function val = get.hasTrace(this)
             val = ~isempty(this.traces);
@@ -134,16 +138,17 @@ classdef MTracerVM < handle
         function obj = Duplicate(this)
             % Make a hard copy of the current MTracerVM
             
-            pn = { ...
-                'chanMapFile', 'channelTable', ...
-                'apBinFile', 'imec', ...
-                'lfBinFile', 'lfMeta', ...
-                'ksFolder', 'rezOps', 'ks', 'ksm', 'kr', ...
-                'recId', 'se', 'tracers', 'F1File', 'F1', 'F2File', 'F2', 'clustTb', ...
-                'focus', 'currentTrace', 'appData'};
-            
             obj = MTracerVM();
             
+            pn = { ...
+                'appData', ...
+                'recId', ...
+                'chanMapFile', 'channelTable', ...
+                'apBinFile', 'imec', 'lfBinFile', 'lfMeta', ...
+                'ksFolder', 'rezOps', 'kr', ...
+                'se', 'clusTb', ...
+                'tracers', 'F1File', 'F1', 'F2File', 'F2', ...
+                'focus', 'currentTrace', 'apSource'};
             for i = 1 : numel(pn)
                 obj.(pn{i}) = this.(pn{i});
             end
@@ -178,7 +183,7 @@ classdef MTracerVM < handle
                 tb.ycoords = s.ycoords;
                 
                 % Sort channels in ascending depth
-                tb = sortrows(tb, 'ycoords');
+                tb = sortrows(tb, {'ycoords', 'xcoords'}, 'descend');
                 
                 this.chanMapFile = filePath;
                 this.channelTable = tb;
@@ -189,7 +194,7 @@ classdef MTracerVM < handle
             end
         end
         
-        function LoadAP(this, filePath)
+        function LinkAP(this, filePath)
             % Load and AP data to Neuropixel.util.imec
             
             if nargin < 2 || isempty(filePath)
@@ -202,7 +207,6 @@ classdef MTracerVM < handle
             
             try
                 this.imec = Neuropixel.ImecDataset(filePath, 'channelMap', this.chanMapFile);
-%                 this.mmap = this.imec.memmapAP_full();
                 this.apBinFile = filePath;
                 this.ExtractRecId(filePath);
                 this.ReadApSlice();
@@ -210,37 +214,6 @@ classdef MTracerVM < handle
                 assignin('base', 'e', e);
                 disp(e);
             end
-        end
-        
-        function ReadApSlice(this)
-            % 
-            
-            if isempty(this.imec)
-                return
-            end
-            
-            % Limit time window size
-            if this.hasMapAxes
-                tWin = this.mapAxes.XLim;
-            else
-                tWin = [0 Inf];
-            end
-            maxSpan = 4;
-            if diff(tWin) > maxSpan
-                tWin = this.focus(1) + [-1 1]*maxSpan/2;
-            end
-            tWin = MMath.Bound(tWin, this.tLims);
-            
-            % Read data
-            [v, ind] = this.imec.readAP_timeWindow(tWin);
-            v = v(this.channelTable.ind, :)'; % reorder by depth
-            t = ind' / 30e3; % consistent with rez.mat
-            
-            % Set to table
-            tb = table;
-            tb.time = {t};
-            tb.v = {v};
-            this.se.SetTable('AP', tb, 'timeSeries');
         end
         
         function LoadLFP(this, filePath)
@@ -282,37 +255,53 @@ classdef MTracerVM < handle
             end
         end
         
-        function LoadKilosortRez(this, filePath)
+        function LoadRez(this, ksDir)
             % Load spiking data from Kilosort output rez.mat
             
-            if nargin < 2 || isempty(filePath)
-                filePath = MBrowse.File([], 'Please select a rez.mat file', '*.mat');
+            if nargin < 2 || isempty(ksDir)
+                ksDir = MBrowse.Folder([], 'Please select the Kilosort output folder');
             end
-            if ~exist(filePath, 'file')
+            if ~exist(ksDir, 'dir')
                 return
             end
             
+            % Try loading from cache
+            s = this.LoadCache(fullfile(ksDir, this.cacheFolderName, 'rez_lite_*.mat'));
+            
             try
-                % Load rez.mat
-                disp('Loading rez.mat ...');
-                load(filePath, 'rez');
+                if ~isempty(s)
+                    rezLite = s.rezLite;
+                else
+                    % Load rez.mat
+                    disp('Loading rez.mat ...');
+                    s = load(fullfile(ksDir, 'rez.mat'), 'rez');
+                    
+                    % Cache a lightweight version of rez
+                    rezLite.st0 = s.rez.st0;
+                    rezLite.ops = s.rez.ops;
+                    cacheFolder = fullfile(ksDir, this.cacheFolderName);
+                    if ~exist(cacheFolder, 'dir')
+                        mkdir(cacheFolder);
+                    end
+                    save(fullfile(cacheFolder, ['rez_lite_' datestr(now, 'yyyy-mm-dd_HH-MM-SS') '.mat']), 'rezLite');
+                end
                 
                 % Make a table of spikes
                 tb = table();
-                tb.time = (rez.st0(:,1) + rez.ops.tstart) / rez.ops.fs;
-                tb.y = rez.st0(:,2);
-                tb.amp = rez.st0(:,3);
+                tb.time = (rezLite.st0(:,1) + rezLite.ops.tstart) / rezLite.ops.fs;
+                tb.y = rezLite.st0(:,2);
+                tb.amp = rezLite.st0(:,3);
                 tb = sortrows(tb, {'time', 'y'});
                 C = mat2cell(tb{:,:}, height(tb), ones(1,width(tb)));
                 tb = cell2table(C, 'VariableNames', tb.Properties.VariableNames);
                 
-                this.ksFolder = fileparts(filePath);
-                this.rezOps = rez.ops;
+                this.ksFolder = ksDir;
+                this.rezOps = rezLite.ops;
                 this.se.SetTable('spikes', tb, 'timeSeries', 0);
                 disp('rez.mat data loaded');
                 
                 % Extract recording ID
-                this.ExtractRecId(filePath);
+                this.ExtractRecId(ksDir);
                 
             catch e
                 assignin('base', 'e', e);
@@ -320,8 +309,8 @@ classdef MTracerVM < handle
             end
         end
         
-        function LoadPhy(this, ksDir)
-            % 
+        function LoadClusResults(this, ksDir)
+            % Load clustering results using NP.KilosortResults class
             
             if nargin < 2 || isempty(ksDir)
                 ksDir = MBrowse.Folder([], 'Please select the Kilosort output folder');
@@ -331,36 +320,34 @@ classdef MTracerVM < handle
             end
             assert(this.hasChanMap, 'Channel Map must be loaded before loading ap.bin')
             
+            % Try loading from cache
+            s = this.LoadCache(fullfile(ksDir, this.cacheFolderName, 'kr_*.mat'));
+            
             try
-                % Construct NP.KilosortResult
-                if this.hasRez
-                    this.kr = NP.KilosortResult(ksDir, this.chanMapFile, this.rezOps.tstart);
+                if ~isempty(s)
+                    kr = s.kr;
                 else
-                    warning('If sorting was performed on temporally truncated data, please load rez.mat first for the sample offset value.');
-                    this.kr = NP.KilosortResult(ksDir, this.chanMapFile);
+                    % Construct NP.KilosortResult
+                    if this.hasRez
+                        kr = NP.KilosortResult(ksDir, this.chanMapFile, this.rezOps.tstart);
+                    else
+                        warning('If sorting was performed on temporally truncated data, please load rez.mat first for the sample offset.');
+                        kr = NP.KilosortResult(ksDir, this.chanMapFile);
+                    end
+                    kr.ComputeAll();
+                    
+                    % Cache the new kr object
+                    cacheFolder = fullfile(ksDir, this.cacheFolderName);
+                    if ~exist(cacheFolder, 'dir')
+                        mkdir(cacheFolder);
+                    end
+                    cacheFile = fullfile(cacheFolder, ['kr_' datestr(now, 'yyyy-mm-dd_HH-MM-SS') '.mat']);
+                    save(cacheFile, 'kr');
                 end
-                this.kr.ComputeAll();
                 
-                % Gather spike data
-                spkTb = table;
-                spkTb.tSpk = double(this.kr.spkTb.timeInd) / 30e3;
-                spkTb.ySpk = this.kr.spkTb.covCentCoords(:,2);
-                
-                % Group spikes by clusters
-                c = this.kr.spkTb.clusIds;
-                [G, ID] = findgroups(c);
-                cTb = table;
-                for i = 1 : width(spkTb)
-                    cTb.(i) = splitapply(@(x) {x}, spkTb.(i), G);
-                end
-                cTb.Properties.VariableNames = spkTb.Properties.VariableNames;
-                cTb.id = ID;
-                cTb = [cTb this.kr.clusTb(:, {'group', 'SNR', 'RPV', 'contam'})];
-                cTb.n_spikes = cellfun(@numel, cTb.tSpk);
-                cTb.depth = round(cellfun(@(x) median(x,'omitnan'), cTb.ySpk));
+                % Get cluster table
+                cTb = kr.clusTb(:, {'clusId', 'group', 'depth', 'numSpikes', 'SNR', 'RPV', 'contam'});
                 cTb(strcmp(cTb.group,'noise'), :) = [];
-                
-                % Sort rows by depth
                 cTb = sortrows(cTb, 'depth', 'descend');
                 
                 % Columns about plotting
@@ -368,7 +355,8 @@ classdef MTracerVM < handle
                 cTb.handle{1} = [];
                 
                 this.ksFolder = ksDir;
-                this.clustTb = cTb;
+                this.kr = kr;
+                this.clusTb = cTb;
                 this.currentCluster = [];
                 this.PlotClusters();
                 
@@ -378,6 +366,32 @@ classdef MTracerVM < handle
             catch e
                 assignin('base', 'e', e);
                 disp(e);
+            end
+        end
+        
+        function [s, cachePath] = LoadCache(~, pattern)
+            % Check caches and load the selected file
+            
+            % Default return values
+            cachePath = '';
+            s = [];
+            
+            % Check for caches
+            cacheSearch = MBrowse.Dir2Table(pattern);
+            if ~isempty(cacheSearch)
+                [idx, isSelected] = listdlg( ...
+                    'ListString', cacheSearch.name, ...
+                    'InitialValue', height(cacheSearch), ...
+                    'Name', 'Available Cache', ...
+                    'SelectionMode', 'single', ...
+                    'OKString', 'Use', ...
+                    'CancelString', 'Recompute', ...
+                    'ListSize', [300 160]);
+                
+                if isSelected
+                    cachePath = fullfile(cacheSearch.folder{idx}, cacheSearch.name{idx});
+                    s = load(cachePath);
+                end
             end
         end
         
@@ -393,7 +407,7 @@ classdef MTracerVM < handle
                 try
                     load(filePaths{i}, '-mat');
                     obj = MTracerTrace(this, dataTb);
-                    this.traces(end+1,1) = obj;
+                    this.traces = [this.traces; obj];
                     this.currentTrace = numel(this.traces);
                     disp(['Loaded trace: ' obj.dispName]);
                     
@@ -428,6 +442,45 @@ classdef MTracerVM < handle
             if this.hasApp
                 uialert(this.app.UIFigure, 'Tracing results are saved to the current directory.', 'Success', 'Icon', 'Info');
             end
+        end
+        
+        function ReadApSlice(this)
+            % 
+            
+            % Limit time window size
+            if this.hasMapAxes
+                tWin = this.mapAxes.XLim;
+            else
+                tWin = [0 Inf];
+            end
+            maxSpan = 2;
+            if diff(tWin) > maxSpan
+                tWin = this.focus(1) + [-1 1]*maxSpan/2;
+            end
+            tWin = MMath.Bound(tWin, this.tLims);
+            
+            % Read data
+            if strcmp(this.apSource, 'imec.ap.bin') && this.hasAP
+                [V, ind] = this.imec.readAP_timeWindow(tWin);
+                V = V(this.channelTable.ind, :)'; % reorder by depth
+                y = this.channelTable.ycoords;
+            elseif strcmp(this.apSource, 'temp_wh.dat') && this.hasClus
+                spWin = round(tWin * 30e3);
+                V = this.kr.ReadSnippets(0, spWin)';
+                ind = spWin(1) : spWin(2);
+                y = this.kr.chanMapTb.ycoords;
+            else
+                return
+            end
+            V = double(V);
+            t = ind' / 30e3; % consistent with rez.mat
+            
+            % Set to table
+            tb = table;
+            tb.time = {t};
+            tb.v = {V};
+            tb.Properties.UserData.y = y;
+            this.se.SetTable('AP', tb, 'timeSeries');
         end
         
         function s = SliceMap(this, varargin)
@@ -689,20 +742,20 @@ classdef MTracerVM < handle
         function PlotClusters(this)
             % Plot all or selected clusters
             
-            if ~this.hasPhy || ~this.hasMapAxes
+            if ~this.hasClus || ~this.hasMapAxes
                 return
             end
             
-            tb = this.clustTb;
+            tb = this.clusTb;
             
             if isempty(this.currentCluster)
-                ids = tb.id;
+                cid = tb.clusId;
             else
-                ids = this.currentCluster;
+                cid = this.currentCluster;
             end
             
             % Plot the selected cluster later, thus on top of unselected ones
-            ind = ismember(tb.id, ids);
+            ind = ismember(tb.clusId, cid);
             tb = [tb(~ind,:); tb(ind,:)];
             
             % Clear existing clusters in map
@@ -710,11 +763,13 @@ classdef MTracerVM < handle
             
             % Plot clusters
             for i = 1 : height(tb)
-                t = tb.tSpk{i};
-                y = tb.ySpk{i};
-                c = tb.color(i,:);
-                k = tb.id(i);
+                % Find data
+                k = tb.clusId(i);
                 g = tb.group(i);
+                c = tb.color(i,:);
+                m = this.kr.spkTb.clusId == k;
+                t = this.kr.spkTb.timeSec(m);
+                y = this.kr.spkTb.covCentCoords(m,2);
                 
                 % Add alpha to unselected clusters, with "mua" lighter than "good"
                 if g == "good"
@@ -722,7 +777,7 @@ classdef MTracerVM < handle
                 else % "mua"
                     r = 0.2;
                 end
-                if ~ismember(k, ids)
+                if ~ismember(k, cid)
                     w = ones(size(c));
                     c = r*c + (1-r)*w;
                 end
@@ -731,7 +786,7 @@ classdef MTracerVM < handle
                 h = plot(this.mapAxes, t, y, '.', 'Color', c, 'MarkerSize', this.spikeMarkerSize, 'HitTest', 'off');
                 
                 % Label selected plots
-                if ismember(k, ids)
+                if ismember(k, cid)
                     h.UserData.id = k;
                     h.UserData.group = g;
                 end
@@ -777,17 +832,14 @@ classdef MTracerVM < handle
             
             % Get cluster colors
             for i = numel(cid) : -1 : 1
-                m = cid(i)==this.clustTb.id;
-                cc(i,:) = this.clustTb.color(m,:);
+                m = cid(i)==this.clusTb.clusId;
+                cc(i,:) = this.clusTb.color(m,:);
             end
-%             if isscalar(cid)
-%                 cc = [0 0 0];
-%             end
             
             % Make plot
             f = MPlot.Figure(301); clf
             f.Name = 'Spike Waveform';
-            this.kr.PlotClusterWaveform(cid, 50, spkMask, 'NumChannels', 32, 'Color', cc, 'ShowCentroids', true);
+            this.kr.PlotClusterWaveform(cid, 50, spkMask, 'NumChannels', 10, 'Color', cc, 'ShowCentroids', false);
             ax = MPlot.Axes(gca);
             ax.Title.String = ['Cluster ' num2str(cid(:)')];
         end
@@ -795,7 +847,7 @@ classdef MTracerVM < handle
         function PlotCCG(this, cid)
             % 
             
-            if ~this.hasPhy
+            if ~this.hasClus
                 return
             end
             
@@ -808,38 +860,18 @@ classdef MTracerVM < handle
                 return
             end
             
-            tb = this.clustTb;
-            tb = tb(ismember(tb.id, cid), :);
+            tb = this.clusTb;
+            tb = tb(ismember(tb.clusId, cid), :);
             
             f = MPlot.Figure(200); clf
             f.Name = 'CCG';
-            this.kr.PlotCCG(tb.id, 'Color', tb.color, 'ShowMetrics', true);
-            
-%             tb = this.clustTb;
-%             tb = tb(ismember(tb.id, cid), :);
-%             
-%             f = MPlot.Figure(200); clf
-%             f.Name = 'CCG';
-%             tEdge = -0.02 : 0.5e-3 : 0.02;
-%             ccg = MNeuro.CCG(tEdge, tb.tSpk{:});
-%             N = height(tb);
-%             tBin = tEdge(2:end) - diff(tEdge)/2;
-%             for i = 1 : N
-%                 for j = i : N
-%                     ax = subplot(N, N, (i-1)*N+j);
-%                     h = bar(tBin*1e3, squeeze(ccg(i,j,:)), 'histc');
-%                     h.EdgeColor = 'none';
-%                     h.FaceColor = (tb.color(i,:)+tb.color(j,:)) / 2;
-%                     MPlot.Axes(ax);
-%                     ax.XLim = tEdge([1 end])*1e3;
-%                 end
-%             end
+            this.kr.PlotCCG(tb.clusId, 'Color', tb.color, 'ShowMetrics', true);
         end
         
         function PlotWaveform(this, cid)
             % Plot 
             
-            if ~this.hasPhy
+            if ~this.hasClus
                 return
             end
             
@@ -854,12 +886,9 @@ classdef MTracerVM < handle
             
             % Find cluster colors
             for i = numel(cid) : -1 : 1
-                m = cid(i)==this.clustTb.id;
-                cc(i,:) = this.clustTb.color(m,:);
+                m = cid(i)==this.clusTb.clusId;
+                cc(i,:) = this.clusTb.color(m,:);
             end
-%             if isscalar(ids)
-%                 cc = [0 0 0];
-%             end
             
             % Plot waveforms
             f = MPlot.Figure(300); clf
@@ -901,13 +930,13 @@ classdef MTracerVM < handle
             
             % Read a temporal slice of AP data from file
             this.ReadApSlice();
-            if ~this.hasAP
+            if ~ismember('AP', this.se.tableNames)
                 return
             end
             tb = this.se.GetTable('AP');
-            V = tb.v{1};
+            v = tb.v{1};
             t = tb.time{1};
-            y = this.channelTable.ycoords;
+            y = tb.Properties.UserData.y;
             
             % Limit y window to 2000um maximal
             yWin = this.mapAxes.YLim;
@@ -916,19 +945,19 @@ classdef MTracerVM < handle
             end
             
             % Choose channel interval based on y window size
-            dy = y(2) - y(1);
-            itvl = MMath.Bound(diff(yWin)/dy/50, [1 2 3 4]);
+            dy = abs(y(2)-y(1));
+            iy = MMath.Bound(diff(yWin)/dy/50, [1 2 3 4]);
             isChan = y > yWin(1) & y <= yWin(2);
-            chanInd = find(isChan, 1, 'first') : itvl : find(isChan, 1, 'last');
+            chanInd = find(isChan, 1, 'first') : iy : find(isChan, 1, 'last');
             
             % Use every other sample in time
             tInd = 1 : 2 : numel(t);
             t = t(tInd);
-            V = V(tInd, chanInd);
+            v = v(tInd, chanInd);
             y = y(chanInd);
             
             % Highpass filtering
-            isHp = true;
+            isHp = strcmp(this.apSource, 'imec.ap.bin');
             if isHp
                 % Prepare parameters for high-pass filtering
                 %   Phy uses bandpass between 500Hz and 14.25kHz(.475*sample_rate) to visulize waveform;
@@ -938,24 +967,22 @@ classdef MTracerVM < handle
                     'StopbandFrequency', 250, ...
                     'StopbandAttenuation', 60, ...
                     'PassbandRipple', 0.1, ...
-                    'SampleRate', 1/diff(t([1 2])), ...
+                    'SampleRate', 30e3, ...
                     'DesignMethod', 'ellip'); % order of this filter is 8
                 
-                V = double(V);
-                for i = 1 : size(V,2)
-                    V(:,i) = filtfilt(D, V(:,i));
+%                 v = double(v);
+                for i = 1 : size(v,2)
+                    v(:,i) = filtfilt(D, v(:,i));
                 end
             end
             
             % Scale voltage timeseries
-            V = zscore(V) * 3;
+            v = zscore(v) * 3;
             
             % Plot
-            hh = line(t, V + y', 'Color', [0 0 0 .3], 'Parent', this.mapAxes, 'HitTest', 'off');
+            hh = line(t, v + y', 'Color', [0 0 0 .3], 'Parent', this.mapAxes, 'HitTest', 'off');
             delete(this.mapLayers.AP)
             this.AddHandle2Layer(hh, 'AP');
-            
-%             tWin = this.mapAxes.XLim;
         end
         
         function PlotTraces(this)
@@ -1080,7 +1107,7 @@ classdef MTracerVM < handle
             end
             
             % Apply marker size to clusters
-            if this.hasPhy
+            if this.hasClus
                 hh = this.mapLayers.clusters;
                 for i = 1 : numel(hh)
                     hh(i).MarkerSize = sz;
@@ -1139,6 +1166,20 @@ classdef MTracerVM < handle
             if this.hasApp
                 this.app.TraceListBox.Items = arrayfun(@(x) x.dispName, this.traces, 'Uni', false);
             end
+        end
+        
+        function MergeTraces(this)
+            % Merge selected traces into one
+            if numel(this.currentTrace) < 2
+                return
+            end
+            tb = cat(1, this.traces(this.currentTrace).dataTb);
+            tb = sortrows(tb, 't');
+            tr = MTracerTrace(this, tb);
+            this.traces(this.currentTrace) = [];
+            this.traces = [this.traces; tr];
+            this.currentTrace = numel(this.traces);
+            this.PlotTraces();
         end
         
         % User Input Callbacks
@@ -1294,24 +1335,6 @@ classdef MTracerVM < handle
                 this.SelectTrace(t, y);
             end
         end
-        
-%         function PlotWaveformOld(this, ids)
-%             
-%             if ~this.hasPhy
-%                 return
-%             end
-%             if numel(ids) > 10
-%                 return
-%             end
-%             
-%             f = MPlot.Figure(100); clf
-%             f.Name = 'Spike Waveform';
-%             snippetSet = this.ks.getWaveformsFromRawData('cluster_ids', ids, ...
-%                 'num_waveforms', 50, 'best_n_channels', 10, 'car', false);
-%             snippetSet.plotAtProbeLocations('alpha', 0.8);
-%             ax = MPlot.Axes(gca);
-%             ax.LooseInset = [0 0 0 0];
-%         end
         
     end
     

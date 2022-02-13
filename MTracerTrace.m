@@ -238,43 +238,60 @@ classdef MTracerTrace < handle
             
             % Get coordinates
             [t, y, ti, yi] = this.GetCoords();
-            yi = yi - mean(yi) + 1000;
-            
-            % Lowpass filter to get slow drift
-            lpFilt = designfilt('lowpassiir', 'FilterOrder', 8, ...
-                'PassbandFrequency', 0.1, 'PassbandRipple', 0.2, ...
-                'SampleRate', 1/this.tSample);
-            yLp = filtfilt(lpFilt, yi);
-            yLp = yLp - mean(yLp) + 1000;
+            ti(isnan(yi)) = [];
+            yi(isnan(yi)) = [];
             
             % Highpass filter to get fluctuation
             hpFilt = designfilt('highpassiir', 'FilterOrder', 8, ...
-                'PassbandFrequency', 0.2, 'PassbandRipple', 0.2, ...
+                'PassbandFrequency', 0.1, 'PassbandRipple', 0.2, ...
                 'SampleRate', 1/this.tSample);
             yHp = filtfilt(hpFilt, yi);
             
             % Compute instantaneous amplitude and frequency
             c = hilbert(yHp);
             amp = abs(c);
-            amp = filtfilt(lpFilt, amp);
+            
+            % Smooth the instantanous amplitude
+%             lpFilt = designfilt('lowpassiir', 'FilterOrder', 8, ...
+%                 'PassbandFrequency', 0.1, 'PassbandRipple', 0.2, ...
+%                 'SampleRate', 1/this.tSample);
+%             amp = filtfilt(lpFilt, amp);
+            amp = smooth(amp, 5/this.tSample);
             
             % Make plot
-            ax = axes(this.motionFig);
+            figure(this.motionFig);
+            
+            ax = subplot(3,1,1); cla
             plot(ax, ti, yi, 'k'); hold on
-            plot(ax, ti, yLp);
-            MPlot.ErrorShade(ti, yi, amp, zeros(size(amp)), 'IsRelative', false, 'Alpha', 0.1);
-            plot(ax, ti, yHp);
             ax.XLabel.String = 'Time (s)';
-            ax.YLabel.String = 'Relative depth (um)';
+            ax.YLabel.String = 'Distance from tip (um)';
+            ax.Title.String = 'Trace (original)';
             ax.XLim = ti([1 end]);
             ax.XGrid = 'on';
             ax.YGrid = 'on';
             ax.XMinorGrid = 'on';
             ax.YMinorGrid = 'on';
-            ax.LooseInset = [0 0 0 0];
+            MPlot.Axes(ax);
+            
+            ax = subplot(3,1,2); cla
+            MPlot.ErrorShade(ti, yi, amp, -amp, 'IsRelative', false, 'Alpha', 0.1); hold on
+            plot(ax, ti, yHp);
+            ax.XLabel.String = 'Time (s)';
+            ax.YLabel.String = 'Amplitude (um)';
+            ax.Title.String = 'Trace (highpassed at 0.1Hz) and amplitude (5s boxcar)';
+            ax.XLim = ti([1 end]);
+            ax.XGrid = 'on';
+            ax.YGrid = 'on';
+            ax.XMinorGrid = 'on';
+            ax.YMinorGrid = 'on';
+            MPlot.Axes(ax);
+            
+            ax = subplot(3,1,3); cla
+            pspectrum(yHp, ti, 'FrequencyLimits', [0 5]);
+            ax.YLim = [-20 60];
+            ax.Title.String = 'Power spectrum of highpassed trace';
             MPlot.Axes(ax);
         end
     end
     
 end
-
