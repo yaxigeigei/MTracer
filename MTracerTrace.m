@@ -10,7 +10,7 @@ classdef MTracerTrace < handle
         
         tEps = 0.2;         % temporal tolerance of selection in seconds
         yEps = 100;         % spatial tolerance of selection in microns
-        tGap = 1;           % interval greater than this value separates segments
+        tGap = Inf;         % interval greater than this value separates segments
         tSample = 0.02;     % sample time for interpolation
     end
     
@@ -137,7 +137,7 @@ classdef MTracerTrace < handle
             y = tb.y(tb.isDone);
             
             if numel(t) > 1
-                isGap = [0; diff(t)] > 1; % this.tGap
+                isGap = [0; diff(t)] > this.tGap;
                 segInd = 1 + cumsum(isGap);
                 for i = max(segInd) : -1 : 1
                     ind = segInd == i;
