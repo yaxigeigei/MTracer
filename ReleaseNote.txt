@@ -1,0 +1,5 @@
+MTracer v0.1.4
+Remove NP.KilosortResult.ComputeBasicStats. Basic cluster stats such as numSpikes is now computed in any cluster metrics functions (i.e. ComputeContamStats and ComputeWaveformStats).
+Add NP.KilosortResult.LabelClusters for assigning cluster groups.
+All clusters now have unique and immutable cluster IDs. Change MergeClusters and CutClusters accordingly.
+

@@ -52,8 +52,8 @@ classdef MTracerTrace < handle
             this.dataTb = tb;
         end
         
-        function obj = Duplicate(this, vmObj)
-            obj = MTracerTrace(vmObj, this.dataTb);
+        function obj = Duplicate(this, newVM)
+            obj = MTracerTrace(newVM, this.dataTb);
         end
         
         function delete(this)

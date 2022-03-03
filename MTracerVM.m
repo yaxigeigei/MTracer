@@ -21,13 +21,11 @@ classdef MTracerVM < handle
         imec Neuropixel.ImecDataset; % object used to access AP data
         lfBinFile = '';             % path of lf.bin file
         lfMeta struct;              % LFP metadata loaded from lf.meta
+        se MSessionExplorer;        % container of voltage and raw spike data, all stored in one epoch
         
         ksFolder = '';              % path of Kilosort/Phy output folder
         rezOps struct;              % rez.ops struct
-        kr NP.KilosortResult;       % object used to access sorting results
-        
-        se MSessionExplorer;        % container of voltage and raw spike data, all stored in one epoch
-        clusTb table;               % stores cluster data
+        clustering MTracerClusteringVM; % view-model that manages clusters and clustering
         
         traces MTracerTrace;        % trace objects
         tracers struct;             % a list of auto tracers, field names are tracer names, each field saves the tracer data
@@ -39,7 +37,7 @@ classdef MTracerVM < handle
         
         % Runtime variables
         focus = [0 0];
-        isTracing = false;
+        mapMode = 'selection';      % 'selection', 'tracing', or 'clustering'
         currentTrace = NaN;
         spikeMarkerSize = 4;
         currentCluster = [];
@@ -75,7 +73,7 @@ classdef MTracerVM < handle
             val = ~isempty(this.imec);
         end
         function val = get.hasClus(this)
-            val = ~isempty(this.kr) && ~isempty(this.kr.mdat);
+            val = this.clustering.hasClus;
         end
         function val = get.hasTrace(this)
             val = ~isempty(this.traces);
@@ -100,8 +98,8 @@ classdef MTracerVM < handle
                 val = [0 this.imec.nSamplesAP] / 30e3;
             elseif this.hasLFP
                 val = [0 str2double(this.lfMeta.fileTimeSecs)];
-            elseif ~isempty(this.kr) && ~isempty(this.kr.mdat)
-                val = [0 size(this.kr.mdat.Data.V, 2)-1] / 30e3;
+            elseif this.clustering.hasBin
+                val = [0 size(this.clustering.sr.mdat.Data.V, 2)-1] / 30e3;
             else
                 val = [0 1e4];
             end
@@ -119,11 +117,9 @@ classdef MTracerVM < handle
         % Construction
         function this = MTracerVM(app)
             % Constructor
-            
             if nargin > 0
                 this.app = app;
             end
-            
             this.mapLayers.focus = [];
             this.mapLayers.spikes = [];
             this.mapLayers.LFP = [];
@@ -131,7 +127,7 @@ classdef MTracerVM < handle
             this.mapLayers.anchors = [];
             this.mapLayers.interp = [];
             this.mapLayers.clusters = [];
-            
+            this.clustering = MTracerClusteringVM(this);
             this.se = MSessionExplorer();
         end
         
@@ -140,19 +136,23 @@ classdef MTracerVM < handle
             
             obj = MTracerVM();
             
+            % Fields to copy directly
             pn = { ...
                 'appData', ...
                 'recId', ...
                 'chanMapFile', 'channelTable', ...
-                'apBinFile', 'imec', 'lfBinFile', 'lfMeta', ...
-                'ksFolder', 'rezOps', 'kr', ...
-                'se', 'clusTb', ...
+                'apBinFile', 'imec', 'lfBinFile', 'lfMeta', 'se', ...
+                'ksFolder', 'rezOps', ...
                 'tracers', 'F1File', 'F1', 'F2File', 'F2', ...
                 'focus', 'currentTrace', 'apSource'};
             for i = 1 : numel(pn)
                 obj.(pn{i}) = this.(pn{i});
             end
             
+            % Copy sorting result object
+            obj.clustering.sr = this.clustering.sr;
+            
+            % Make hard copies of the traces associated with the new main VM
             if this.hasTrace
                 obj.traces = arrayfun(@(x) x.Duplicate(obj), this.traces);
             end
@@ -214,6 +214,45 @@ classdef MTracerVM < handle
                 assignin('base', 'e', e);
                 disp(e);
             end
+        end
+        
+        function ReadApSlice(this)
+            % 
+            
+            % Limit time window size
+            if this.hasMapAxes
+                tWin = this.mapAxes.XLim;
+            else
+                tWin = [0 Inf];
+            end
+            maxSpan = 2;
+            if diff(tWin) > maxSpan
+                tWin = this.focus(1) + [-1 1]*maxSpan/2;
+            end
+            tWin = MMath.Bound(tWin, this.tLims);
+            
+            % Read data
+            if strcmp(this.apSource, 'imec.ap.bin') && this.hasAP
+                [V, ind] = this.imec.readAP_timeWindow(tWin);
+                V = V(this.channelTable.ind, :)'; % reorder by depth
+                y = this.channelTable.ycoords;
+            elseif strcmp(this.apSource, 'temp_wh.dat') && this.hasClus
+                spWin = round(tWin * 30e3);
+                V = this.clustering.sr.ReadSnippets(0, spWin)';
+                ind = spWin(1) : spWin(2);
+                y = this.clustering.sr.chanMapTb.ycoords;
+            else
+                return
+            end
+            V = double(V);
+            t = ind' / 30e3; % consistent with rez.mat
+            
+            % Set to table
+            tb = table;
+            tb.time = {t};
+            tb.v = {V};
+            tb.Properties.UserData.y = y;
+            this.se.SetTable('AP', tb, 'timeSeries');
         end
         
         function LoadLFP(this, filePath)
@@ -300,8 +339,9 @@ classdef MTracerVM < handle
                 this.se.SetTable('spikes', tb, 'timeSeries', 0);
                 disp('rez.mat data loaded');
                 
-                % Extract recording ID
+                % Update UI
                 this.ExtractRecId(ksDir);
+                this.PlotSpikes();
                 
             catch e
                 assignin('base', 'e', e);
@@ -321,47 +361,37 @@ classdef MTracerVM < handle
             assert(this.hasChanMap, 'Channel Map must be loaded before loading ap.bin')
             
             % Try loading from cache
-            s = this.LoadCache(fullfile(ksDir, this.cacheFolderName, 'kr_*.mat'));
+            s = this.LoadCache(fullfile(ksDir, this.cacheFolderName, 'sr_*.mat'));
             
             try
                 if ~isempty(s)
-                    kr = s.kr;
+                    sr = s.sr;
                 else
                     % Construct NP.KilosortResult
                     if this.hasRez
-                        kr = NP.KilosortResult(ksDir, this.chanMapFile, this.rezOps.tstart);
+                        sr = NP.KilosortResult(ksDir, this.chanMapFile, this.rezOps.tstart);
                     else
-                        warning('If sorting was performed on temporally truncated data, please load rez.mat first for the sample offset.');
-                        kr = NP.KilosortResult(ksDir, this.chanMapFile);
+                        warning('If sorting was performed on temporally truncated data, please load rez.mat first to access the sample offset.');
+                        sr = NP.KilosortResult(ksDir, this.chanMapFile);
                     end
-                    kr.ComputeAll();
+                    sr.ComputeAll();
                     
                     % Cache the new kr object
                     cacheFolder = fullfile(ksDir, this.cacheFolderName);
                     if ~exist(cacheFolder, 'dir')
                         mkdir(cacheFolder);
                     end
-                    cacheFile = fullfile(cacheFolder, ['kr_' datestr(now, 'yyyy-mm-dd_HH-MM-SS') '.mat']);
-                    save(cacheFile, 'kr');
+                    cacheFile = fullfile(cacheFolder, ['sr_' datestr(now, 'yyyy-mm-dd_HH-MM-SS') '.mat']);
+                    save(cacheFile, 'sr');
                 end
                 
-                % Get cluster table
-                cTb = kr.clusTb(:, {'clusId', 'group', 'depth', 'numSpikes', 'SNR', 'RPV', 'contam'});
-                cTb(strcmp(cTb.group,'noise'), :) = [];
-                cTb = sortrows(cTb, 'depth', 'descend');
+                % Add sorting result to the Clustering tab model
+                this.clustering = MTracerClusteringVM(this, sr);
                 
-                % Columns about plotting
-                cTb.color = lines(height(cTb));
-                cTb.handle{1} = [];
-                
-                this.ksFolder = ksDir;
-                this.kr = kr;
-                this.clusTb = cTb;
-                this.currentCluster = [];
-                this.PlotClusters();
-                
-                % Extract recording ID
+                % Update UI
                 this.ExtractRecId(ksDir);
+                this.clustering.UpdateAppUI();
+                this.clustering.PlotSpikes();
                 
             catch e
                 assignin('base', 'e', e);
@@ -442,45 +472,6 @@ classdef MTracerVM < handle
             if this.hasApp
                 uialert(this.app.UIFigure, 'Tracing results are saved to the current directory.', 'Success', 'Icon', 'Info');
             end
-        end
-        
-        function ReadApSlice(this)
-            % 
-            
-            % Limit time window size
-            if this.hasMapAxes
-                tWin = this.mapAxes.XLim;
-            else
-                tWin = [0 Inf];
-            end
-            maxSpan = 2;
-            if diff(tWin) > maxSpan
-                tWin = this.focus(1) + [-1 1]*maxSpan/2;
-            end
-            tWin = MMath.Bound(tWin, this.tLims);
-            
-            % Read data
-            if strcmp(this.apSource, 'imec.ap.bin') && this.hasAP
-                [V, ind] = this.imec.readAP_timeWindow(tWin);
-                V = V(this.channelTable.ind, :)'; % reorder by depth
-                y = this.channelTable.ycoords;
-            elseif strcmp(this.apSource, 'temp_wh.dat') && this.hasClus
-                spWin = round(tWin * 30e3);
-                V = this.kr.ReadSnippets(0, spWin)';
-                ind = spWin(1) : spWin(2);
-                y = this.kr.chanMapTb.ycoords;
-            else
-                return
-            end
-            V = double(V);
-            t = ind' / 30e3; % consistent with rez.mat
-            
-            % Set to table
-            tb = table;
-            tb.time = {t};
-            tb.v = {V};
-            tb.Properties.UserData.y = y;
-            this.se.SetTable('AP', tb, 'timeSeries');
         end
         
         function s = SliceMap(this, varargin)
@@ -667,7 +658,7 @@ classdef MTracerVM < handle
             this.InitializeMapAxes();
             this.PlotLFP();
             this.PlotSpikes();
-            this.PlotClusters();
+            this.clustering.PlotSpikes();
             this.PlotTraces();
             this.PlotFocus();
         end
@@ -687,10 +678,13 @@ classdef MTracerVM < handle
             xx = [this.focus([1 1])' this.tLims'];
             yy = [this.yLims' this.focus([2 2])'];
             
-            if this.isTracing
-                cc = [0 1 0 .5];
-            else
-                cc = [0 1 1 .7];
+            switch this.mapMode
+                case 'selection'
+                    cc = [0 1 1 .7];
+                case 'tracing'
+                    cc = [0 1 0 .5];
+                case 'clustering'
+                    cc = [0 0 1 .5];
             end
             
             h = this.mapLayers.focus;
@@ -733,170 +727,10 @@ classdef MTracerVM < handle
             end
             
             MPlot.Axes(this.mapAxes);
-            this.UpdateMapLims(this.tLims, this.yLims);
+            this.SetMapROI(this.tLims, this.yLims);
             
             delete(this.mapLayers.spikes);
             this.AddHandle2Layer(cat(1, hh{:}), 'spikes');
-        end
-        
-        function PlotClusters(this)
-            % Plot all or selected clusters
-            
-            if ~this.hasClus || ~this.hasMapAxes
-                return
-            end
-            
-            tb = this.clusTb;
-            
-            if isempty(this.currentCluster)
-                cid = tb.clusId;
-            else
-                cid = this.currentCluster;
-            end
-            
-            % Plot the selected cluster later, thus on top of unselected ones
-            ind = ismember(tb.clusId, cid);
-            tb = [tb(~ind,:); tb(ind,:)];
-            
-            % Clear existing clusters in map
-            delete(this.mapLayers.clusters);
-            
-            % Plot clusters
-            for i = 1 : height(tb)
-                % Find data
-                k = tb.clusId(i);
-                g = tb.group(i);
-                c = tb.color(i,:);
-                m = this.kr.spkTb.clusId == k;
-                t = this.kr.spkTb.timeSec(m);
-                y = this.kr.spkTb.covCentCoords(m,2);
-                
-                % Add alpha to unselected clusters, with "mua" lighter than "good"
-                if g == "good"
-                    r = 0.4;
-                else % "mua"
-                    r = 0.2;
-                end
-                if ~ismember(k, cid)
-                    w = ones(size(c));
-                    c = r*c + (1-r)*w;
-                end
-                
-                % Plot spikes
-                h = plot(this.mapAxes, t, y, '.', 'Color', c, 'MarkerSize', this.spikeMarkerSize, 'HitTest', 'off');
-                
-                % Label selected plots
-                if ismember(k, cid)
-                    h.UserData.id = k;
-                    h.UserData.group = g;
-                end
-                
-                tb.handle{i} = h;
-            end
-            this.AddHandle2Layer(cat(1, tb.handle{:}), 'clusters');
-            this.UpdateSpikeMarkerSize(1, 'relative');
-            
-            % Initialize brush callback
-            brushObj = brush(this.mapFig);
-            brushObj.ActionPostCallback = @this.PlotBrushedSpikes;
-        end
-        
-        function PlotBrushedSpikes(this, fig, axesStruct)
-            % 
-            
-            h = axesStruct.Axes.Children;
-            cid = NaN(numel(h), 1);
-            spkMask = cell(size(cid));
-            for i = 1 : numel(h)
-                % Check if the handle is cluster spike plot
-                s = h(i).UserData;
-                if ~all(isfield(s, {'id', 'group'}))
-                    continue
-                end
-                
-                % Check if selecting any data
-                b = logical(h(i).BrushData);
-                if ~any(b)
-                    continue
-                end
-                
-                cid(i) = s.id;
-                spkMask{i} = b;
-            end
-            isBrushed = ~isnan(cid);
-            if ~any(isBrushed)
-                return
-            end
-            cid = cid(isBrushed);
-            spkMask = spkMask(isBrushed);
-            
-            % Get cluster colors
-            for i = numel(cid) : -1 : 1
-                m = cid(i)==this.clusTb.clusId;
-                cc(i,:) = this.clusTb.color(m,:);
-            end
-            
-            % Make plot
-            f = MPlot.Figure(301); clf
-            f.Name = 'Spike Waveform';
-            this.kr.PlotClusterWaveform(cid, 50, spkMask, 'NumChannels', 10, 'Color', cc, 'ShowCentroids', false);
-            ax = MPlot.Axes(gca);
-            ax.Title.String = ['Cluster ' num2str(cid(:)')];
-        end
-        
-        function PlotCCG(this, cid)
-            % 
-            
-            if ~this.hasClus
-                return
-            end
-            
-            if nargin < 2
-                cid = this.currentCluster;
-            end
-            
-            % No plot when selecting to many clusters
-            if numel(cid) > 5
-                return
-            end
-            
-            tb = this.clusTb;
-            tb = tb(ismember(tb.clusId, cid), :);
-            
-            f = MPlot.Figure(200); clf
-            f.Name = 'CCG';
-            this.kr.PlotCCG(tb.clusId, 'Color', tb.color, 'ShowMetrics', true);
-        end
-        
-        function PlotWaveform(this, cid)
-            % Plot 
-            
-            if ~this.hasClus
-                return
-            end
-            
-            if nargin < 2
-                cid = this.currentCluster;
-            end
-            
-            % No plot when selecting to many clusters
-            if numel(cid) > 5
-                return
-            end
-            
-            % Find cluster colors
-            for i = numel(cid) : -1 : 1
-                m = cid(i)==this.clusTb.clusId;
-                cc(i,:) = this.clusTb.color(m,:);
-            end
-            
-            % Plot waveforms
-            f = MPlot.Figure(300); clf
-            f.Name = 'Spike Waveform';
-            this.kr.PlotClusterWaveform(cid, 50, 'NumChannels', 10, 'Color', cc);
-            ax = MPlot.Axes(gca);
-            ax.Title.String = ['Cluster ' num2str(cid(:)')];
-%             ax.LooseInset = [0 0 0 0];
         end
         
         function PlotLFP(this)
@@ -915,7 +749,7 @@ classdef MTracerVM < handle
             colormap(this.mapAxes, MPlot.PolarMap);
             MPlot.Axes(this.mapAxes);
             this.mapAxes.YDir = 'normal';
-            this.UpdateMapLims(this.tLims, this.yLims);
+            this.SetMapROI(this.tLims, this.yLims);
             
             delete(this.mapLayers.LFP)
             this.AddHandle2Layer(h, 'LFP');
@@ -985,18 +819,6 @@ classdef MTracerVM < handle
             this.AddHandle2Layer(hh, 'AP');
         end
         
-        function PlotTraces(this)
-            % Plot traces
-            if this.hasApp
-                this.app.TraceListBox.Items = arrayfun(@(x) x.dispName, this.traces, 'Uni', false);
-            end
-            if this.hasMapAxes
-                for i = 1 : numel(this.traces)
-                    this.traces(i).PlotTrace(ismember(i, this.currentTrace));
-                end
-            end
-        end
-        
         function ToggleLayer(this, num)
             % Toggle layer on and off
             if num < 1 || num > numel(this.layerNames)
@@ -1043,17 +865,30 @@ classdef MTracerVM < handle
             this.UpdateLayerTree();
         end
         
-        function UpdateMapLims(this, tWin, yWin, t, y)
+        function SetMapROI(this, tWin, yWin, t, y)
+            % Go to the ROI on the Map and update related app UI components
+            % 
+            %   this.SetMapROI(tWin, yWin)
+            %   this.SetMapROI(tWin, yWin, t, y)
+            % 
+            % When reference coordinates t and y are not provided, tWin and yWin are used as absolute positions.
+            % When t and y are provided, tWin and yWin are used as relative positions (i.e. diff(tWin) and diff(yWin))
+            %   and are re-centered around (t,y).
+            % If the given or derived tWin or yWin ends up out of limit (exceeding this.tLims or this.yLims), 
+            %   the ROI size will be maintained by adjusting the center.
+            % 
             
             if ~this.hasMapAxes
                 return
             end
             
             if nargin > 3
+                % Recenter ROI around (t,y)
                 tWin = tWin - mean(tWin) + t;
                 yWin = yWin - mean(yWin) + y;
             end
             
+            % Check and adjust out-of-limit in time-axis
             if tWin(1) < this.tLims(1)
                 tWin = [this.tLims(1), this.tLims(1)+diff(tWin)];
             end
@@ -1062,6 +897,7 @@ classdef MTracerVM < handle
             end
             tWin = MMath.Bound(tWin, this.tLims);
             
+            % Check and adjust out-of-limit in depth-axis
             if yWin(1) < this.yLims(1)
                 yWin = [this.yLims(1) this.yLims(1)+diff(yWin)];
             end
@@ -1070,9 +906,11 @@ classdef MTracerVM < handle
             end
             yWin = MMath.Bound(yWin, this.yLims);
             
+            % Apply axes limits
             set(this.mapAxes, 'XLim', tWin, 'YLim', yWin);
             
             if this.hasApp
+                % Update app UI components
                 tWin = round(tWin, 3);
                 yWin = round(yWin, 3);
                 this.app.TimeWin1EditField.Value = tWin(1);
@@ -1116,6 +954,18 @@ classdef MTracerVM < handle
         end
         
         % Tracing
+        function PlotTraces(this)
+            % Plot traces
+            if this.hasApp
+                this.app.TraceListBox.Items = arrayfun(@(x) x.dispName, this.traces, 'Uni', false);
+            end
+            if this.hasMapAxes
+                for i = 1 : numel(this.traces)
+                    this.traces(i).PlotTrace(ismember(i, this.currentTrace));
+                end
+            end
+        end
+        
         function SelectTrace(this, t ,y)
             % Trace selection
             yd = arrayfun(@(x) x.Dist2Selection(t, y), this.traces);
@@ -1132,16 +982,27 @@ classdef MTracerVM < handle
         
         function EnterTracingMode(this)
             if isscalar(this.currentTrace)
-                this.isTracing = true;
+                this.mapMode = 'tracing';
                 this.PlotFocus();
                 disp('Tracing Mode');
             else
-                error('Cannot enter tracing mode with more than one selected trace\n');
+                warning('Cannot enter tracing mode with more than one selected trace\n');
+            end
+        end
+        
+        function EnterClusteringMode(this)
+            if this.hasClus
+                this.mapMode = 'clustering';
+                this.PlotFocus();
+                disp('Clustering Mode');
+            else
+                warning('Cannot enter clustering mode since there is no cluster data\n');
             end
         end
         
         function EnterSelectionMode(this)
-            this.isTracing = false;
+            this.clustering.ClearPolygon();
+            this.mapMode = 'selection';
             this.PlotFocus();
             disp('Selection Mode');
         end
@@ -1191,16 +1052,21 @@ classdef MTracerVM < handle
             if ismember('control', M)
                 switch K
                     case 'z'
-                        % Undo/Redo point
-                        if this.isTracing && ~isnan(this.currentTrace)
+                        % Undo/Redo
+                        if strcmp(this.mapMode, 'tracing') && ~isnan(this.currentTrace)
                             if ismember('shift', M)
                                 this.traces(this.currentTrace).Redo();
                             else
                                 this.traces(this.currentTrace).Undo();
                             end
                         end
-                        
-                    otherwise
+                end
+            elseif any(ismember({'alt', 'option'}, M))
+                switch K
+                    % Set cluster label
+                    case 'g', this.clustering.LabelClusters('good');
+                    case 'm', this.clustering.LabelClusters('mua');
+                    case 'n', this.clustering.LabelClusters('noise');
                 end
             else
                 % Toggle layer in map
@@ -1227,49 +1093,51 @@ classdef MTracerVM < handle
                         
                     case 't'
                         this.EnterTracingMode();
+                    case 'k'
+                        this.EnterClusteringMode();
                     case 'escape'
                         this.EnterSelectionMode();
                         
                     case {'a', 'leftarrow'}
                         % Forward in time
                         tWin = tWin - dt;
-                        this.UpdateMapLims(tWin, yWin);
+                        this.SetMapROI(tWin, yWin);
                     case {'d', 'rightarrow'}
                         % Backward in time
                         tWin = tWin + dt;
-                        this.UpdateMapLims(tWin, yWin);
+                        this.SetMapROI(tWin, yWin);
                     case {'s', 'downarrow'}
                         % Downward in depth
                         yWin = yWin - dy;
-                        this.UpdateMapLims(tWin, yWin);
+                        this.SetMapROI(tWin, yWin);
                     case {'w', 'uparrow'}
                         % Upward in depth
                         yWin = yWin + dy;
-                        this.UpdateMapLims(tWin, yWin);
+                        this.SetMapROI(tWin, yWin);
                         
                     case 'leftbracket'
                         % Zoom-in in time
                         tWin = (tWin-t)/0.5 + t;
-                        this.UpdateMapLims(tWin, yWin, t, y);
+                        this.SetMapROI(tWin, yWin, t, y);
                     case 'rightbracket'
                         % Zoom-out in time
                         tWin = (tWin-t)*0.5 + t;
-                        this.UpdateMapLims(tWin, yWin, t, y);
+                        this.SetMapROI(tWin, yWin, t, y);
                     case {'equal', 'add'}
                         % Zoom-in in depth
                         yWin = (yWin-y)*0.8 + y;
-                        this.UpdateMapLims(tWin, yWin, t, y);
+                        this.SetMapROI(tWin, yWin, t, y);
                     case {'hyphen', 'subtract'}
                         % Zoom-out in depth
                         yWin = (yWin-y)/0.8 + y;
-                        this.UpdateMapLims(tWin, yWin, t, y);
+                        this.SetMapROI(tWin, yWin, t, y);
                         
                     case 'c'
                         % Center the reference point
-                        this.UpdateMapLims(tWin, yWin, t, y);
+                        this.SetMapROI(tWin, yWin, t, y);
                     case 'o'
                         % View full map
-                        this.UpdateMapLims(this.tLims, this.yLims);
+                        this.SetMapROI(this.tLims, this.yLims);
                         
                     case 'period'
                         % Increase spike marker size
@@ -1302,7 +1170,7 @@ classdef MTracerVM < handle
         function Scroll(this, src, eventdata)
             tWin = this.mapAxes.XLim;
             dt = eventdata.VerticalScrollCount * eventdata.VerticalScrollAmount/3 * diff(tWin) / 50;
-            this.UpdateMapLims(tWin+dt, this.mapAxes.YLim);
+            this.SetMapROI(tWin+dt, this.mapAxes.YLim);
         end
         
         function SetPoint(this, src, eventdata)
@@ -1317,8 +1185,8 @@ classdef MTracerVM < handle
             this.focus = [t y];
             this.PlotFocus();
             
-            if this.isTracing
-                % Adding or remove point
+            if strcmp(this.mapMode, 'tracing')
+                % Add or remove trace point
                 if isnan(this.currentTrace)
                     set(this.mapLayers.anchors, 'Visible', 'on');
                     set(this.mapLayers.interp, 'Visible', 'on');
@@ -1329,6 +1197,13 @@ classdef MTracerVM < handle
                     tr.SetPoint(t, y);
                 elseif eventdata.Button == 3
                     tr.RemovePoint(t, y);
+                end
+            elseif strcmp(this.mapMode, 'clustering')
+                % Add or remove polygon vertex
+                if eventdata.Button == 1
+                    this.clustering.SetPoint(t, y);
+                elseif eventdata.Button == 3
+                    this.clustering.RemoveLastPoint();
                 end
             else
                 % Trace selection
