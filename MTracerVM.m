@@ -4,14 +4,20 @@ classdef MTracerVM < handle
     properties(Constant)
         cacheFolderName = 'mtracer_cache';
     end
-    
+      
     properties
         % UI
         app;                        % handle to app object
-        appData;
+        appData;                    % 
+        
         mapFig;                     % handle to Maps window
         mapAxes;                    % handle to the axes in Maps window
-        mapLayers struct = struct;  % stores plot elements in mapAxes, each field is a layer
+        mapLayers;                  % stores plot elements in mapAxes, each field is a layer
+        
+        waveFig;                    % handle of the waveform window
+        ccgFig;                     % handle of the CCG window
+        ftFig;                      % handle of the feature-time window
+        ampFig;                     % handle of the amplitude-time window
         
         % Data
         recId char = 'NP0_B0';
@@ -25,7 +31,7 @@ classdef MTracerVM < handle
         
         ksFolder = '';              % path of Kilosort/Phy output folder
         rezOps struct;              % rez.ops struct
-        clustering MTracerClusteringVM; % view-model that manages clusters and clustering
+        clustering MTracer.ClusteringVM; % view-model that manages clusters and clustering
         
         traces MTracerTrace;        % trace objects
         tracers struct;             % a list of auto tracers, field names are tracer names, each field saves the tracer data
@@ -36,41 +42,52 @@ classdef MTracerVM < handle
         F2 NP.MotionInterpolant;    % spatial-temporal interpolant for motion correction
         
         % Runtime variables
-        focus = [0 0];
         mapMode = 'selection';      % 'selection', 'tracing', or 'clustering'
-        currentTrace = NaN;
-        spikeMarkerSize = 4;
-        currentCluster = [];
         apSource = 'imec.ap.bin';   % must be 'imec.ap.bin' or 'temp_wh.dat'
+        focus = [0 0];
+        currentTrace = NaN;         % currently selected trace(s)
+        spikeMarkerSize = 4;
     end
     
     properties(Dependent)
-        hasRez;
-        hasChanMap;
-        hasLFP;
-        hasAP;
-        hasTrace;
-        hasInterp2;
-        hasClus;
         hasApp;
         hasMapAxes;
+        hasAmpAxes;
+        hasChanMap;
+        hasAP;
+        hasLFP;
+        hasRez;
+        hasClus;
+        hasTrace;
+        hasInterp2;
         layerNames;
         tLims;
         yLims;
     end
     
     methods
-        function val = get.hasRez(this)
-            val = ismember('spikes', this.se.tableNames);
+        function val = get.hasApp(this)
+            val = ~isempty(this.app);
+        end
+        function val = get.hasMapAxes(this)
+            h = this.mapAxes;
+            val = ~isempty(h) && ishandle(h) && isvalid(h);
+        end
+        function val = get.hasAmpAxes(this)
+            val = ~isempty(this.ampFig) && isvalid(this.ampFig) && ...
+                ~isempty(this.ampFig.Children) && isvalid(this.ampFig.Children);
         end
         function val = get.hasChanMap(this)
             val = ~isempty(this.channelTable);
         end
+        function val = get.hasAP(this)
+            val = ~isempty(this.imec);
+        end
         function val = get.hasLFP(this)
             val = ismember('LFP', this.se.tableNames);
         end
-        function val = get.hasAP(this)
-            val = ~isempty(this.imec);
+        function val = get.hasRez(this)
+            val = ismember('spikes', this.se.tableNames);
         end
         function val = get.hasClus(this)
             val = this.clustering.hasClus;
@@ -80,13 +97,6 @@ classdef MTracerVM < handle
         end
         function val = get.hasInterp2(this)
             val = ~isempty(this.F2);
-        end
-        function val = get.hasApp(this)
-            val = ~isempty(this.app);
-        end
-        function val = get.hasMapAxes(this)
-            h = this.mapAxes;
-            val = ~isempty(h) && ishandle(h) && isvalid(h);
         end
         function val = get.layerNames(this)
             val = fieldnames(this.mapLayers);
@@ -120,46 +130,47 @@ classdef MTracerVM < handle
             if nargin > 0
                 this.app = app;
             end
-            this.mapLayers.focus = [];
-            this.mapLayers.spikes = [];
-            this.mapLayers.LFP = [];
-            this.mapLayers.AP = [];
-            this.mapLayers.anchors = [];
-            this.mapLayers.interp = [];
-            this.mapLayers.clusters = [];
-            this.clustering = MTracerClusteringVM(this);
+            this.mapLayers.focus = [];      % 1
+            this.mapLayers.spikes = [];     % 2
+            this.mapLayers.clusters = [];   % 3
+            this.mapLayers.AP = [];         % 4
+            this.mapLayers.LFP = [];        % 5
+            this.mapLayers.anchors = [];    % 6
+            this.mapLayers.interp = [];     % 7
+            this.clustering = MTracer.ClusteringVM(this);
             this.se = MSessionExplorer();
         end
         
-        function obj = Duplicate(this)
+        function vm = Duplicate(this)
             % Make a hard copy of the current MTracerVM
             
-            obj = MTracerVM();
+            vm = MTracerVM();
             
             % Fields to copy directly
             pn = { ...
                 'appData', ...
-                'recId', ...
-                'chanMapFile', 'channelTable', ...
-                'apBinFile', 'imec', 'lfBinFile', 'lfMeta', 'se', ...
+                'recId', 'chanMapFile', 'channelTable', 'apBinFile', 'imec', 'lfBinFile', 'lfMeta', 'se', ...
                 'ksFolder', 'rezOps', ...
                 'tracers', 'F1File', 'F1', 'F2File', 'F2', ...
-                'focus', 'currentTrace', 'apSource'};
+                'apSource', 'focus', 'currentTrace', 'spikeMarkerSize'};
             for i = 1 : numel(pn)
-                obj.(pn{i}) = this.(pn{i});
+                vm.(pn{i}) = this.(pn{i});
             end
             
-            % Copy sorting result object
-            obj.clustering.sr = this.clustering.sr;
+            % Make a hard copy of the sorting result object
+            vm.clustering = this.clustering.Duplicate(vm);
             
             % Make hard copies of the traces associated with the new main VM
             if this.hasTrace
-                obj.traces = arrayfun(@(x) x.Duplicate(obj), this.traces);
+                vm.traces = arrayfun(@(x) x.Duplicate(vm), this.traces);
             end
         end
         
         function delete(this)
             delete(this.mapFig);
+            delete(this.waveFig);
+            delete(this.ccgFig);
+            delete(this.ampFig);
         end
         
         % Data
@@ -240,7 +251,7 @@ classdef MTracerVM < handle
                 spWin = round(tWin * 30e3);
                 V = this.clustering.sr.ReadSnippets(0, spWin)';
                 ind = spWin(1) : spWin(2);
-                y = this.clustering.sr.chanMapTb.ycoords;
+                y = this.clustering.sr.chanTb.ycoords;
             else
                 return
             end
@@ -358,7 +369,8 @@ classdef MTracerVM < handle
             if ~exist(ksDir, 'dir')
                 return
             end
-            assert(this.hasChanMap, 'Channel Map must be loaded before loading ap.bin')
+            this.ksFolder = ksDir;
+            this.ExtractRecId(ksDir);
             
             % Try loading from cache
             s = this.LoadCache(fullfile(ksDir, this.cacheFolderName, 'sr_*.mat'));
@@ -368,12 +380,9 @@ classdef MTracerVM < handle
                     sr = s.sr;
                 else
                     % Construct NP.KilosortResult
-                    if this.hasRez
-                        sr = NP.KilosortResult(ksDir, this.chanMapFile, this.rezOps.tstart);
-                    else
-                        warning('If sorting was performed on temporally truncated data, please load rez.mat first to access the sample offset.');
-                        sr = NP.KilosortResult(ksDir, this.chanMapFile);
-                    end
+                    sr = NP.KilosortResult();
+                    assert(this.hasChanMap, 'Channel Map must be loaded before importing sorting results.');
+                    sr.ImportData(ksDir, this.chanMapFile);
                     sr.ComputeAll();
                     
                     % Cache the new kr object
@@ -381,17 +390,15 @@ classdef MTracerVM < handle
                     if ~exist(cacheFolder, 'dir')
                         mkdir(cacheFolder);
                     end
-                    cacheFile = fullfile(cacheFolder, ['sr_' datestr(now, 'yyyy-mm-dd_HH-MM-SS') '.mat']);
+                    cacheFile = fullfile(cacheFolder, ['sr_' this.recId '_' datestr(now, 'yyyy-mm-dd_HH-MM-SS') '.mat']);
                     save(cacheFile, 'sr');
                 end
                 
-                % Add sorting result to the Clustering tab model
-                this.clustering = MTracerClusteringVM(this, sr);
-                
-                % Update UI
-                this.ExtractRecId(ksDir);
-                this.clustering.UpdateAppUI();
-                this.clustering.PlotSpikes();
+                % Replace the old
+                delete(this.clustering);
+                delete(this.mapLayers.clusters);
+                this.clustering = MTracer.ClusteringVM(this, sr);
+                this.clustering.UpdateAll();
                 
             catch e
                 assignin('base', 'e', e);
@@ -628,6 +635,8 @@ classdef MTracerVM < handle
                     'Name', 'MTracer: Maps', ...
                     'NumberTitle', 'off', ...
                     'IntegerHandle', 'off', ...
+                    'Menubar', 'none', ...
+                    'Toolbar', 'figure', ...
                     'WindowKeyPressFcn', @this.KeyPress, ...
                     'WindowKeyReleaseFcn', @this.KeyRelease, ...
                     'WindowScrollWheelFcn', @this.Scroll, ...
@@ -646,6 +655,7 @@ classdef MTracerVM < handle
             ax.YLabel.String = 'Distance from tip (um)';
             ax.XLim = this.tLims;
             ax.YLim = this.yLims;
+            ax.TickLength(1) = 0.002;
             ax.LooseInset = [0 0 0 0];
             ax.ButtonDownFcn = @this.SetPoint;
             ax.BusyAction = 'cancel';
@@ -878,10 +888,6 @@ classdef MTracerVM < handle
             %   the ROI size will be maintained by adjusting the center.
             % 
             
-            if ~this.hasMapAxes
-                return
-            end
-            
             if nargin > 3
                 % Recenter ROI around (t,y)
                 tWin = tWin - mean(tWin) + t;
@@ -907,7 +913,12 @@ classdef MTracerVM < handle
             yWin = MMath.Bound(yWin, this.yLims);
             
             % Apply axes limits
-            set(this.mapAxes, 'XLim', tWin, 'YLim', yWin);
+            if this.hasMapAxes
+                set(this.mapAxes, 'XLim', tWin, 'YLim', yWin);
+            end
+            if this.hasAmpAxes
+                set(this.ampFig.Children, 'XLim', tWin);
+            end
             
             if this.hasApp
                 % Update app UI components
@@ -1094,7 +1105,11 @@ classdef MTracerVM < handle
                     case 't'
                         this.EnterTracingMode();
                     case 'k'
-                        this.EnterClusteringMode();
+                        if strcmp(this.mapMode, 'selection')
+                            this.EnterClusteringMode();
+                        elseif strcmp(this.mapMode, 'clustering')
+                            this.clustering.CutClusters();
+                        end
                     case 'escape'
                         this.EnterSelectionMode();
                         

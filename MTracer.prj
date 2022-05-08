@@ -1,5 +1,5 @@
 <deployment-project plugin="plugin.apptool" plugin-version="1.0">
-  <configuration build-checksum="1750816526" file="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\MTracer\MTracer.prj" location="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\MTracer" name="MTracer" target="target.mlapps" target-name="Package App">
+  <configuration build-checksum="3507127839" file="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo_mtracer\MTracer.prj" location="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo_mtracer" name="MTracer" target="target.mlapps" target-name="Package App">
     <param.appname>MTracer</param.appname>
     <param.authnamewatermark>Many Xu</param.authnamewatermark>
     <param.email>duo.xu@ucsf.edu</param.email>
@@ -8,8 +8,8 @@
     <param.icons />
     <param.summary />
     <param.description />
-    <param.screenshot>C:\Users\many\AppData\Local\Temp\tpc25b9e76_e543_4c87_9da8_390df37232e1.png</param.screenshot>
-    <param.version>0.1.3</param.version>
+    <param.screenshot>C:\Users\many\AppData\Local\Temp\tp3ddd6d9a_63f2_4ef2_95e3_66f56ece7a9e.png</param.screenshot>
+    <param.version>0.1.4</param.version>
     <param.products.name />
     <param.products.id />
     <param.products.version />
@@ -77,14 +77,16 @@
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\+NP\MotionInterpolant.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\+NP\Param.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\+NP\Unit.m</file>
+      <file>${PROJECT_ROOT}\+MTracer\ClusteringVM.m</file>
+      <file>${PROJECT_ROOT}\+MTracer\OperationManager.m</file>
+      <file>${PROJECT_ROOT}\+MTracer\SortingResult.m</file>
       <file>${PROJECT_ROOT}\MTracerTrace.m</file>
       <file>${PROJECT_ROOT}\MTracerVM.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\supporting_files\NP1_NHP_HalfCol_kilosortChanMap.mat</file>
     </fileset.depfun>
     <fileset.resources />
     <fileset.package />
     <build-deliverables>
-      <file location="${PROJECT_ROOT}" name="release" optional="false">C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo\MTracer\release</file>
+      <file location="${PROJECT_ROOT}" name="release" optional="false">C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\analysis\repo_mtracer\release</file>
     </build-deliverables>
     <workflow />
     <matlab>

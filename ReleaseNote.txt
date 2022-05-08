@@ -3,3 +3,13 @@ Remove NP.KilosortResult.ComputeBasicStats. Basic cluster stats such as numSpike
 Add NP.KilosortResult.LabelClusters for assigning cluster groups.
 All clusters now have unique and immutable cluster IDs. Change MergeClusters and CutClusters accordingly.
 
+MTracer v0.1.3
+Cache the raw spike map and the computed clustering results.
+Add an option for choosing the data source (imec.ap.bin or temp_wh.dat) for AP traces.
+Can read incomplete curation results.
+Implement Merge traces.
+Change the cutoff frequency of the motion highpass filter from 0.2Hz to 0.1Hz.
+Add power spectrum plot in trace Inspection window.
+Add Merge and Cut methods in KilosortResults class.
+Misc optimizations in UI.
+Remove dependencies no longer in use.
