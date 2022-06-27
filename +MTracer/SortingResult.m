@@ -3,7 +3,6 @@ classdef SortingResult < handle
     %   Detailed explanation goes here
     
     properties
-        chanMapTb table;
         chanTb table;
         spkTb table;
         clusTb table;

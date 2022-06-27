@@ -21,7 +21,7 @@ classdef ClusteringVM < handle
     end
     methods
         function val = get.hasClus(this)
-            val = ~isempty(this.sr);
+            val = ~(isempty(this.sr) || isempty(this.sr.spkTb));
         end
         function val = get.hasBin(this)
             val = ~isempty(this.sr) && ~isempty(this.sr.mdat);
@@ -52,13 +52,17 @@ classdef ClusteringVM < handle
             
             vmClus = MTracer.ClusteringVM(vmApp);
             
+            if ~isempty(this.sr)
+                return
+            end
+            
             % Make a hard copy
             srCopy = this.sr.Duplicate();
-            
+
             % Remove added columns
             isAdded = ismember(srCopy.clusTb.Properties.VariableNames, {'handle', 'memmap'});
             srCopy.clusTb(:,isAdded) = [];
-            
+
             vmClus.sr = srCopy;
             vmClus.om = this.om;
             vmClus.coi = this.coi;
