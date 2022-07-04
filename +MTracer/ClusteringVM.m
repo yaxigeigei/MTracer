@@ -3,7 +3,7 @@ classdef ClusteringVM < handle
     
     properties
         vm MTracerVM;                   % handle of the main app view-model
-        sr NP.KilosortResult;           % object managing sorting results
+        sr;                             % object managing sorting results
         om MTracer.OperationManager;    % object managing clustering operation history
         coi = [];       % clusters of interest, usually aka the selected clusters
         cutCoords;      % a n-by-2 numeric array that stores the (t,y) coordinates of the cutting polygon

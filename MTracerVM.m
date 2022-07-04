@@ -4,7 +4,7 @@ classdef MTracerVM < handle
     properties(Constant)
         cacheFolderName = 'mtracer_cache';
     end
-      
+    
     properties
         % UI
         app;                        % handle to app object
@@ -39,7 +39,7 @@ classdef MTracerVM < handle
         F1File = '';                % path of the saved motion scaling object
         F1;                         % movement scaling object for motion extrapolation
         F2File = '';                % path of the spatial-temporal interpolant
-        F2 NP.MotionInterpolant;    % spatial-temporal interpolant for motion correction
+        F2;                         % spatial-temporal interpolant for motion correction
         
         % Runtime variables
         mapMode = 'selection';      % 'selection', 'tracing', or 'clustering'
