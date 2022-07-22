@@ -378,12 +378,12 @@ classdef MTracerVM < handle
             try
                 if ~isempty(s)
                     sr = s.sr;
-
+                    
                     % Update the mdat mapping
                     sr.mdat.Filename = fullfile(this.ksFolder, 'temp_wh.dat');
                 else
-                    % Construct NP.KilosortResult
-                    sr = NP.KilosortResult();
+                    % Construct MTracer.KilosortResult
+                    sr = MTracer.KilosortResult();
                     assert(this.hasChanMap, 'Channel Map must be loaded before importing sorting results.');
                     sr.ImportData(ksDir, this.chanMapFile);
                     sr.ComputeAll();

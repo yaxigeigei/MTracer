@@ -80,6 +80,47 @@ classdef SortingResult < handle
                     'ChannelOrder', this.chanTb.sortInd);
         end
         
+        function WriteSpikeAudio(this, fileName, cid, tWin)
+            % Extract spike waveform and plot 
+            
+            % Audio specs
+            Fs = 44100;
+            tAud = tWin(1) : 1/Fs : tWin(2);
+            
+            % Find spikes that belong to the cluster and are within the time window
+            isClus = this.spkTb.clusId == cid;
+            tSpk = this.spkTb.timeSec;
+            spkInd = isClus & tSpk > tWin(1) & tSpk < tWin(2);
+            
+            % Extract single-channel waveform
+            [wf, ~, wfWin] = this.ExtractWaveform(spkInd, 'NumChannels', 1);
+            
+            if ~isempty(wf)
+                % Find spike waveform timestamps for audio
+                wf = permute(wf, [2 3 1]);
+                tWf = zeros(size(wf));
+                for i = 1 : size(wf,2)
+                    tWf(:,i) = wfWin(i,1) : wfWin(i,2);
+                end
+                wf = wf(:);
+                tWf = tWf(:) / this.samplingRate;
+                
+                % Remove overlapping samples
+                [tWf, ind] = unique(tWf);
+                wf = wf(ind);
+                
+                % Generate full audio by interpolation
+                wAud = interp1(tWf, double(wf), tAud, 'linear', 0);
+                wAud = wAud / max(abs(wAud)) * 0.1; % adjust amplitude, 0.1 is just an emperical factor
+            else
+                warning('Cluster %i has no spikes in the specified time window. The audio will be silent.', cid);
+                wAud = zeros(size(tAud));
+            end
+            
+            % Write audio
+            audiowrite(fileName, wAud, Fs);
+        end
+        
         % Computing
         function ComputeAll(this)
             % Compute all metrics for all clusters
@@ -819,72 +860,6 @@ classdef SortingResult < handle
                     end
                 end
             end
-        end
-        
-        % Not in use
-        function ComputeWaveformCenterOld(this, spkInd, W, varargin)
-            % Compute cross-covariance centroid of spike waveform
-            % 
-            %	ComputeWaveformCenter(spkInd, W)
-            %	ComputeWaveformCenter(spkInd, W, 'VectTemplates', [])
-            % 
-            % Inputs
-            %   spkInd              Indices of spikes in spkTb.
-            %   W                   A #channel-by-#timepoints-by-#spike waveform array that matches spkInd
-            %   'VectTemplates'     Cropped and vectorized templates. If [], will use the output of 
-            %                       SortingResult.IVectorizeTemplates(-4:5)
-            
-            p = inputParser();
-            p.addParameter('VectTemplates', [], @iscell);
-            p.parse(varargin{:});
-            tps = p.Results.VectTemplates;
-            
-            chWin = -4 : 5;
-            if isempty(tps)
-                this.IVectorizeTemplates(chWin)
-            end
-            
-            % Find spikes of the selected clusters
-            sTb = this.spkTb(spkInd,:);
-            
-            % Compute covariance between waveform and template center
-            [nCh, nTm, nSpk] = size(W);
-            val = zeros(nCh, 1, nSpk);
-            chX = zeros(nCh, 1, nSpk);
-            chY = zeros(nCh, 1, nSpk);
-            parfor i = 1 : height(sTb)
-                % Get template and waveform
-                tid = sTb.tempId(i) + 1;
-                tp = tps{tid};
-                w = double(W(:,:,i))';
-                nTmTp = numel(tp);
-                
-                % Compute cross-covariance
-                kXC = 1 : nCh-numel(chWin)+1;
-                chXC = kXC - chWin(1);
-                iTmXC = (kXC-1)*nTm + 1;
-                xc = zeros(nCh, 1);
-                for k = kXC
-                    m = iTmXC(k) : iTmXC(k)+nTmTp-1;
-                    xc(chXC(k)) = tp * w(m)' / (nTmTp-1);
-                end
-                val(:,:,i) = xc;
-                
-                % Get channel coordinates
-                tid = sTb.tempId(i) + 1;
-                chX(:,:,i) = this.tempTb.chanX{tid};
-                chY(:,:,i) = this.tempTb.chanY{tid};
-            end
-            chXY = cat(2, chX, chY);
-            
-            % Thresholding
-            valTh = val - 0.3*max(val, [], 1);
-            valTh(valTh < 0) = 0;
-            
-            % Estimate centroids
-            [XY, centChInd] = MNeuro.ComputeWaveformCenter(valTh, chXY, 'computed', 'centroid');
-            this.spkTb.centCoords(spkInd,:) = XY;
-            this.spkTb.centChanInd(spkInd) = centChInd;
         end
         
     end
