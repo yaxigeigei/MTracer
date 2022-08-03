@@ -174,30 +174,23 @@ classdef MTracerVM < handle
         end
         
         % Data
-        function LoadChannelMap(this, filePath)
+        function LoadChannelMap(this, chanMapPath)
             % Load the 354-channel configuration
             
-            if nargin < 2 || isempty(filePath)
-                filePath = MBrowse.File([], 'Please select the channel map file', '*.mat');
+            if nargin < 2 || isempty(chanMapPath)
+                chanMapPath = MBrowse.File([], 'Please select the channel map file', '*.mat');
             end
-            if ~exist(filePath, 'file')
+            if ~exist(chanMapPath, 'file')
                 return
             end
             
             try
-                s = load(filePath);
+                chanTb = MKilosort2.LoadChanMap2Table(chanMapPath);
+                [chanTb, I] = sortrows(chanTb, {'shankInd', 'ycoords', 'xcoords'}, {'ascend', 'descend', 'ascend'});
+                chanTb.sortInd = I;
                 
-                tb = table;
-                tb.ind = (1 : numel(s.chanMap))';
-                tb.chanMap = s.chanMap;
-                tb.xcoords = s.xcoords;
-                tb.ycoords = s.ycoords;
-                
-                % Sort channels in ascending depth
-                tb = sortrows(tb, {'ycoords', 'xcoords'}, 'descend');
-                
-                this.chanMapFile = filePath;
-                this.channelTable = tb;
+                this.chanMapFile = chanMapPath;
+                this.channelTable = chanTb;
                 
             catch e
                 assignin('base', 'e', e);
@@ -245,7 +238,7 @@ classdef MTracerVM < handle
             % Read data
             if strcmp(this.apSource, 'imec.ap.bin') && this.hasAP
                 [V, ind] = this.imec.readAP_timeWindow(tWin);
-                V = V(this.channelTable.ind, :)'; % reorder by depth
+                V = V(this.channelTable.sortInd, :)'; % reorder by depth
                 y = this.channelTable.ycoords;
             elseif strcmp(this.apSource, 'temp_wh.dat') && this.hasClus
                 spWin = round(tWin * 30e3);
@@ -282,7 +275,7 @@ classdef MTracerVM < handle
                 disp('Loading lf.bin ...');
                 lfMetaFile = strrep(filePath, '.bin', '.meta');
                 [meta, v, t] = MSpikeGLX.ReadLFP(lfMetaFile);
-                v = v(:, this.channelTable.ind); % sort channels by depth
+                v = v(:, this.channelTable.sortInd); % sort channels by depth
                 
                 % Make downsampled LFP timeSeries table
                 disp('Downsampling LFP to 50Hz ...');

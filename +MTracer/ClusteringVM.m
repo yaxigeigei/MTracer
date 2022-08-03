@@ -52,7 +52,7 @@ classdef ClusteringVM < handle
             
             vmClus = MTracer.ClusteringVM(vmApp);
             
-            if ~isempty(this.sr)
+            if isempty(this.sr)
                 return
             end
             

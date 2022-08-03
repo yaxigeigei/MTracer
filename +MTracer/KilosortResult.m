@@ -17,10 +17,10 @@ classdef KilosortResult < MTracer.SortingResult
         function kr = Duplicate(this)
             % Make a hard copy of the object
             if isempty(this)
-                kr = NP.KilosortResult();
+                kr = MTracer.KilosortResult();
                 return
             end
-            kr = NP.KilosortResult();
+            kr = MTracer.KilosortResult();
             p = properties(this);
             for i = 1 : numel(p)
                 kr.(p{i}) = this.(p{i});
@@ -147,28 +147,7 @@ classdef KilosortResult < MTracer.SortingResult
             %    decreasing y coordinate (distance to tip), and increasing x coordinate
             % 2) Channels that are not present in voltage data should not be in the table.
             
-            disp('Loading channel map')
-            
-            s = load(chanMapFile);
-            this.chanMapFile = chanMapFile;
-            this.chanMapName = s.name;
-            
-            % Make a table of channel info
-            chTb = table;
-            chTb.chanId = s.chanMap0ind;
-            chTb.shankInd = s.shankInd;
-            chTb.xcoords = s.xcoords;
-            chTb.ycoords = s.ycoords;
-            chTb.isConnected = logical(s.connected);
-            
-            % Remove the reference channel
-            chTb = chTb(chTb.isConnected, :);
-            
-            % Sort table by depth
-            [chTb, I] = sortrows(chTb, {'shankInd', 'ycoords', 'xcoords'}, {'ascend', 'descend', 'ascend'});
-            chTb.sortInd = I;
-            
-            this.chanTb = chTb;
+            [~, this.chanTb] = MKilosort2.LoadChanMap2Table(chanMapFile);
         end
         
         function rez = LoadRez(this, rezFile)

@@ -1,5 +1,5 @@
 <deployment-project plugin="plugin.apptool" plugin-version="1.0">
-  <configuration build-checksum="1169281281" file="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\code\mtracer\MTracer.prj" location="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\code\mtracer" name="MTracer" target="target.mlapps" target-name="Package App">
+  <configuration build-checksum="3960640558" file="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\code\mtracer\MTracer.prj" location="C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\code\mtracer" name="MTracer" target="target.mlapps" target-name="Package App">
     <param.appname>MTracer</param.appname>
     <param.authnamewatermark>Many Xu</param.authnamewatermark>
     <param.email>duo.xu@ucsf.edu</param.email>
@@ -8,7 +8,7 @@
     <param.icons />
     <param.summary />
     <param.description />
-    <param.screenshot>C:\Users\many\AppData\Local\Temp\tp84603475_0d5c_448e_bedc_47f3e8259529.png</param.screenshot>
+    <param.screenshot>C:\Users\many\AppData\Local\Temp\tp36fcc3fd_dd96_48bd_a363_08511bdd8403.png</param.screenshot>
     <param.version>0.1.4</param.version>
     <param.products.name />
     <param.products.id />
@@ -42,45 +42,43 @@
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\ManyFunMatlab\Math Tool Kit\MMath.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\ManyFunMatlab\Math Tool Kit\MNeuro.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\ManyFunMatlab\Plotting Tool Kit\MPlot.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\cmocean.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\distinguishable_colors.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\getDefaultChannelMapFile.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\GetFullPath.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\hideInLegend.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\isstringlike.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\linspecer.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\makecol.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\makerow.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\makeSymLink.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\mkdirRecursive.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\plotStackedTraces.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\pmat.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\pmatbal.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\ProgressBar.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\relativepath.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\rugplot.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\showFirstInLegend.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\+Utils\TensorUtils.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\ChannelMap.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\ConcatenationInfo.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\ImecDataset.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\readINI.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\SnippetSet.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\TimeShiftSpec.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\writeINI.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\neuropixel-utils\+Neuropixel\writeNPY.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\npy-matlab\npy-matlab\constructNPYheader.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\npy-matlab\npy-matlab\readNPY.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\npy-matlab\npy-matlab\readNPYheader.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\pkg\NP\npy-matlab\npy-matlab\writeNPY.m</file>
-      <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\code\babble\+NP\KilosortResult.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\code\babble\+NP\Param.m</file>
       <file>C:\Users\many\Dropbox (oconnorlab)\Documents\RnD\Chang Lab\project_np\code\babble\+NP\Unit.m</file>
       <file>${PROJECT_ROOT}\+MTracer\ClusteringVM.m</file>
       <file>${PROJECT_ROOT}\+MTracer\KilosortResult.m</file>
       <file>${PROJECT_ROOT}\+MTracer\OperationManager.m</file>
       <file>${PROJECT_ROOT}\+MTracer\SortingResult.m</file>
-      <file>${PROJECT_ROOT}\lastimeDir.mat</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\cmocean.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\distinguishable_colors.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\getDefaultChannelMapFile.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\GetFullPath.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\hideInLegend.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\isstringlike.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\linspecer.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\makecol.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\makerow.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\makeSymLink.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\mkdirRecursive.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\plotStackedTraces.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\pmat.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\pmatbal.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\ProgressBar.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\relativepath.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\rugplot.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\showFirstInLegend.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\TensorUtils.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\ChannelMap.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\ConcatenationInfo.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\ImecDataset.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\readINI.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\SnippetSet.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\TimeShiftSpec.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\writeINI.m</file>
+      <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\writeNPY.m</file>
       <file>${PROJECT_ROOT}\MTracerTrace.m</file>
       <file>${PROJECT_ROOT}\MTracerVM.m</file>
     </fileset.depfun>
