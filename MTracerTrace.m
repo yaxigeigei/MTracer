@@ -110,6 +110,14 @@ classdef MTracerTrace < handle
             end
         end
         
+        function [tPt, yPt] = AutoSetPoint(this)
+            % Add a new point to table
+            tracer = this.vm.tracers.(this.vm.currentTracer);
+            [tTr, yTr] = GetCoords(this);
+            [tPt, yPt] = tracer.Query(tTr(end), yTr(end));
+            this.SetPoint(tPt, yPt);
+        end
+        
         function Undo(this)
             % Undo the last point
             idx = find(this.dataTb.isDone, 1, 'last');

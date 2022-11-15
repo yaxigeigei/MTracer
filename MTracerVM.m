@@ -46,6 +46,7 @@ classdef MTracerVM < handle
         apSource = 'imec.ap.bin';   % must be 'imec.ap.bin' or 'temp_wh.dat'
         focus = [0 0];
         currentTrace = NaN;         % currently selected trace(s)
+        currentTracer = 'none';     % currently selected auto tracer
         spikeMarkerSize = 4;
     end
     
@@ -477,6 +478,26 @@ classdef MTracerVM < handle
             end
         end
         
+        function tracerName = LoadAutoTracer(this)
+            % Load an auto-tracer from file
+            filePath = MBrowse.File([], 'Please select a file with an auto-tracer object', '*.mat');
+            if ~exist(filePath, 'file')
+                tracerName = [];
+                return
+            end
+            s = load(filePath);
+            [~, tracerName] = fileparts(filePath);
+            fn = fieldnames(s);
+            assert(numel(fn)==1, "Tracer file should only contain a single tracer object variable.");
+            if ismember(tracerName, fieldnames(this.tracers))
+                warning("Loading this auto-tracer overwrites the existing one with the same file name.")
+            end
+            obj = s.(fn{1});
+            obj.vm = this;
+            this.tracers(1).(tracerName) = obj;
+            this.currentTracer = tracerName;
+        end
+        
         function s = SliceMap(this, varargin)
             % Get map data in the current view
             % 
@@ -495,8 +516,8 @@ classdef MTracerVM < handle
             %   s               tbw
             
             p = inputParser;
-            p.addOptional('tWin', this.mapAxes.XLim, @(x) numel(x)==2 && isnumeric(x));
-            p.addOptional('yWin', this.mapAxes.YLim, @(x) numel(x)==2 && isnumeric(x));
+            p.addOptional('tWin', [], @(x) numel(x)==2 && isnumeric(x));
+            p.addOptional('yWin', [], @(x) numel(x)==2 && isnumeric(x));
             p.addParameter('DataNames', {'traces', 'spikes', 'LFP', 'AP'});
             p.addParameter('TraceType', 'interp', @(x) ismember(x, {'anchor', 'interp'}));
             p.parse(varargin{:});
@@ -504,6 +525,13 @@ classdef MTracerVM < handle
             yWin = p.Results.yWin;
             dn = cellstr(p.Results.DataNames);
             traceType = p.Results.TraceType;
+            
+            if isempty(tWin)
+                tWin = this.mapAxes.XLim;
+            end
+            if isempty(yWin)
+                tWin = this.mapAxes.YLim;
+            end
             
             s.tWin = tWin;
             s.yWin = yWin;
@@ -1100,6 +1128,9 @@ classdef MTracerVM < handle
                         
                     case 't'
                         this.EnterTracingMode();
+                    case 'q'
+                        this.AutoTrace();
+                        
                     case 'k'
                         if strcmp(this.mapMode, 'selection')
                             this.EnterClusteringMode();
@@ -1222,6 +1253,15 @@ classdef MTracerVM < handle
             end
         end
         
+        function AutoTrace(this, src, eventdata)
+            % 
+            if isnan(this.currentTrace) || strcmp(this.currentTracer, 'none')
+                return
+            end
+            [t, y] = this.traces(this.currentTrace).AutoSetPoint();
+            this.focus = [t y];
+            this.PlotFocus();
+        end
     end
     
 end

@@ -15,11 +15,11 @@ classdef MSpikeGLX
             meta = MSpikeGLX.ReadMeta([baseName '.meta'], folderPath);
         end
         
-        function [meta, aiArray, diArray, t] = ReadNI(metaPath)
+        function [meta, aiArray, diArray, t] = ReadNI(niPath)
             % 
             
             % Read metadata
-            [folderPath, baseName] = fileparts(metaPath);
+            [folderPath, baseName] = fileparts(niPath);
             meta = MSpikeGLX.ReadMeta([baseName '.meta'], folderPath);
             
             % Read timeseries
@@ -49,11 +49,11 @@ classdef MSpikeGLX
             end
         end
         
-        function [meta, lfpArray, t] = ReadLFP(metaPath)
+        function [meta, lfpArray, t] = ReadLFP(lfPath)
             % 
             
             % Read metadata
-            [folderPath, baseName] = fileparts(metaPath);
+            [folderPath, baseName] = fileparts(lfPath);
             meta = MSpikeGLX.ReadMeta([baseName '.meta'], folderPath);
             
             % Read timeseries
