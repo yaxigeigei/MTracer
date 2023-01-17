@@ -98,7 +98,7 @@ classdef ClusteringVM < handle
             if ~this.hasClus
                 return
             end
-            this.sr.ExportData();
+            this.sr.ExportData(this.vm.ksFolder);
         end
         
         function delete(this)
@@ -389,7 +389,7 @@ classdef ClusteringVM < handle
             % Find the range of mean cluster depths
             m = ismember(this.sr.clusTb.clusId, cid);
             yClus = this.sr.clusTb.depth(m);
-            yWin = [min(yClus) max(yClus)] + [-1 1]*500;
+            yWin = [min(yClus) max(yClus)] + [-1 1]*250;
             
             % Set ROI
             this.vm.SetMapROI(this.vm.mapAxes.XLim, yWin);
@@ -614,7 +614,7 @@ classdef ClusteringVM < handle
             end
             hold(ax, 'off');
             
-            this.sr.PlotClusterWaveform(cid, 50, 'NumChannels', 10, 'Color', this.GetClusterColor(cid), 'Axes', ax);
+            this.sr.PlotClusterWaveform(cid, 50, 'NumChannels', 32, 'Color', this.GetClusterColor(cid), 'Axes', ax);
             this.sr.PlotClusterTemplate(cid, 'Axes', ax);
             ax.Title.String = ['Cluster ' num2str(cid(:)')];
             ax.LooseInset([2 4]) = [0 0];

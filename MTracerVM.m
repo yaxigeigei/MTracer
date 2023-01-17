@@ -109,8 +109,8 @@ classdef MTracerVM < handle
                 val = [0 this.imec.nSamplesAP] / 30e3;
             elseif this.hasLFP
                 val = [0 str2double(this.lfMeta.fileTimeSecs)];
-            elseif this.clustering.hasBin
-                val = [0 size(this.clustering.sr.mdat.Data.V, 2)-1] / 30e3;
+            elseif this.clustering.hasClus
+                val = this.clustering.sr.rezLite.ops.trange;
             else
                 val = [0 1e4];
             end

@@ -129,9 +129,9 @@ classdef SortingResult < handle
             disp('Computing spiking metrics');
             this.ComputeContamStats([]);
             
-            % Compute wavefrom centeroids
-            disp('Localizing spikes');
-            this.ComputeWaveformCenter([]);
+%             % Compute wavefrom centeroids
+%             disp('Localizing spikes');
+%             this.ComputeWaveformCenter([]);
             
 %             % Extract and cache center waveform in batches
 %             nSpk = height(this.spkTb);
@@ -147,12 +147,63 @@ classdef SortingResult < handle
             
             % Compute cluster waveform metrics
             disp('Computing waveform metrics');
-            centW = this.ExtractWaveform([], 'NumChannels', 10);
-            this.ComputeWaveformStats([], centW);
-            this.ComputeClusterDepth([]);
+%             [centW, chWin, tmWin] = this.ExtractWaveform([], 'NumChannels', 10);
+%             this.ComputeWaveformStats([], centW, chWin);
+            this.ComputeWaveformStats();
+            this.ComputeClusterDepth();
         end
         
         function spkXY = ComputeWaveformCenter(this, spkInd)
+            % Compute centroids of spike waveform
+            % 
+            %	ComputeWaveformCenter()
+            %	ComputeWaveformCenter(spkInd)
+            % 
+            
+            if nargin < 2 || isempty(spkInd)
+                spkInd = (1:height(this.spkTb))';
+            end
+            
+            sTb = this.spkTb(spkInd,:);
+            tTb = this.tempTb;
+            
+            % Preallocate center coordinates
+            if ~ismember('centCoords', sTb.Properties.VariableNames)
+                sTb.centCoords = NaN(height(sTb), 2);
+            end
+            
+            % Loop through spikes by templates
+            tidList = unique(sTb.tempId);
+            for tid = tidList(:)'
+                % Check if template is present
+                isTemp = tTb.tempId == tid;
+                if isempty(tTb.temp{isTemp})
+                    continue
+                end
+                
+                % Find spikes that use this template
+                isSpk = sTb.tempId == tid;
+%                 if ~any(isSpk)
+%                     continue
+%                 end
+                
+                % Read waveform
+                [W, chWin] = this.ExtractWaveform(isSpk, 'NumChannels', 32);
+                
+                % Get channel coordinates
+                chXY = [tTb.chanX{isTemp} tTb.chanY{isTemp}];
+                
+                % Estimate centroids
+                spkXY = MNeuro.ComputeWaveformCenter(W, chXY, 'power', 'centroid');
+                
+                % Save to spike table
+                sTb.centCoords(isSpk,:) = spkXY;
+            end
+            spkXY = sTb.centCoords;
+            this.spkTb.centCoords(spkInd,:) = spkXY;
+        end
+        
+        function spkXY = ComputeWaveformCenterRecon(this, spkInd)
             % Compute centroids from denoised (reverse PCA) spike waveform
             % 
             %	ComputeWaveformCenter()
@@ -194,7 +245,12 @@ classdef SortingResult < handle
                 end
                 
                 % Reconstruct waveform from bases and projection weights
-                W = pagemtimes(B, P(:,:,isSpk));
+                clear W
+                spkP = P(:,:,isSpk);
+                for k = size(spkP,3) : -1 : 1
+                    W(:,:,k) = B * spkP(:,:,k);
+                end
+%                 W = pagemtimes(B, P(:,:,isSpk));
                 W = permute(W, [2 1 3]); % to channel-by-time-by-spike
                 
                 % Find channel coordinates
@@ -290,18 +346,18 @@ classdef SortingResult < handle
             this.clusTb = tb;
         end
         
-        function ComputeWaveformStats(this, cid, W)
-            % Compute waveform statistics such as median, SD, and SNR for specified clusters. 
+        function ComputeWaveformStats(this, cid, wf, chWins)
+            % Compute waveform location and statistics such as median, SD, and SNR for specified clusters. 
             % Results will be added/updated in clusTb.
-            %
+            % 
             %   ComputeWaveformStats()
             %	ComputeWaveformStats(cid)
-            %	ComputeWaveformStats(cid, W)
+            %	ComputeWaveformStats(cid, W, chWins)
             % 
             % Inputs
             %   cid         A vector of cluster IDs. If not provided or an empty array, the methods will 
             %               compute for all clusters.
-            %   W           A #channels-by-#timepoints-by-#spikes array for all spikes of interest. 
+            %   wf          A #channels-by-#timepoints-by-#spikes array for all spikes of interest. 
             %               If not provided, the method will extract them from the binary file.
             % 
             % Output
@@ -322,8 +378,13 @@ classdef SortingResult < handle
             % Find spikes of the selected clusters
             isClus = ismember(this.spkTb.clusId, cid);
             sTb = this.spkTb(isClus,:);
-            if exist('W', 'var') && size(W,3) == numel(isClus)
-                W = W(:,:,isClus);
+            
+            % Only keep waveform inputs for the selected clusters
+            if exist('wf', 'var') && size(wf,3) == height(this.spkTb)
+                wf = wf(:,:,isClus);
+            end
+            if exist('chWins', 'var') && size(chWins,1) == height(this.spkTb)
+                chWins = chWins(isClus,:);
             end
             
             for i = 1 : numel(cid)
@@ -338,13 +399,13 @@ classdef SortingResult < handle
                 end
                 
                 % Get waveform
-                if ~exist('W', 'var') || isempty(W)
-                    w = this.ExtractWaveform(this.spkTb.clusId == cid(i), 'NumChannels', 10);
+                if ~exist('wf', 'var') || isempty(wf)
+                    [w, cw] = this.ExtractWaveform(this.spkTb.clusId == cid(i), 'NumChannels', 10);
                 elseif isnumeric(W) && size(W,3) == numel(m)
-                    w = W(:,:,m);
+                    w = wf(:,:,m);
+                    cw = chWins(m,:);
                 end
                 w = double(w);
-                [nCh, nTm, nW] = size(w);
                 
                 % Average waveform
                 k = cTb.clusId == cid(i);
@@ -353,18 +414,29 @@ classdef SortingResult < handle
                 cTb.waveformSD{k} = wMad / 0.6745;
                 
                 % Compute SNR
-                c = ceil(nCh/2); % find the middle channel
-                r = w(c,:,:) - wMed(c,:); % 1-by-nTm-by-nW residuals
+                ic = ceil(size(w,1)/2); % find the middle channel
+                r = w(ic,:,:) - wMed(ic,:); % 1-by-nTm-by-nW residuals
                 [~, ~, rMad] = MMath.MedianStats(r(:));
-                cTb.SNR(k) = (max(wMed(c,:)) - min(wMed(c,:))) / (rMad/0.6745);
+                cTb.SNR(k) = (max(wMed(ic,:)) - min(wMed(ic,:))) / (rMad/0.6745);
                 
-                % Compute median cluster depth
-                if ismember('centCoords', sTb.Properties.VariableNames)
-                    cTb.depth(k) = round(median(sTb.centCoords(m,2), 'omitnan'));
-                end
+                % Compute waveform centroid
+                chInd = arrayfun(@(x,y) x:y, cw(:,1), cw(:,2), 'Uni', false);
+                chInd = cat(1, chInd{:})';
+                chXY = cat(3, this.chanTb.xcoords(chInd), this.chanTb.ycoords(chInd));
+                chXY = permute(chXY, [1 3 2]);
+                spkXY = MNeuro.ComputeWaveformCenter(w, chXY, 'power', 'centroid');
+                sTb.centCoords(m,:) = spkXY;
+                cTb.depth(k) = round(median(sTb.centCoords(m,2), 'omitnan'));
             end
             
+            % Update cluster table
             this.clusTb = cTb;
+            
+            % Update centroid coordinates to spike table
+            if ~ismember('centCoords', this.spkTb.Properties.VariableNames)
+                this.spkTb.centCoords = NaN(height(this.spkTb), 2);
+            end
+            this.spkTb.centCoords(isClus,:) = sTb.centCoords;
         end
         
         function ComputeClusterDepth(this, cid)
@@ -581,8 +653,10 @@ classdef SortingResult < handle
             
             p = inputParser;
             p.KeepUnmatched = true;
+            p.addOptional('N', min(50, numel(spkInd)), @(x) isnumeric(x) && isscalar(x));
             p.addParameter('Color', [0 0 0], @(x) ismember(numel(x), [3 4]));
             p.parse(varargin{:});
+            N = p.Results.N;
             cc = p.Results.Color;
             
             if numel(cc) == 3

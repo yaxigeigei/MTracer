@@ -152,15 +152,22 @@ classdef KilosortResult < MTracer.SortingResult
         
         function rez = LoadRez(this, rezFile)
             % Load a subset of data from rez.mat
+            
             disp('Loading rez.mat');
             load(rezFile, 'rez');
+            
+            this.sampleOffset = rez.ops.tstart;
+            this.pcBases = rez.ops.wPCA;
+            
             fields2copy = {'ops', 'dshift', 'st0'};
             for i = 1 : numel(fields2copy)
                 fn = fields2copy{i};
+                if ~ismember(fn, fieldnames(rez))
+                    warning("Field '%s' is missing from rez", fn);
+                    continue
+                end
                 this.rezLite.(fn) = rez.(fn);
             end
-            this.sampleOffset = this.rezLite.ops.tstart;
-            this.pcBases = this.rezLite.ops.wPCA;
         end
         
         function ExportData(this, ksFolder)
