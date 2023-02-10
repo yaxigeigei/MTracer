@@ -1,23 +1,30 @@
 classdef ClusteringVM < handle
     % 
     
-    properties
-        vm MTracerVM;                   % handle of the main app view-model
-        sr;                             % object managing sorting results
-        om MTracer.OperationManager;    % object managing clustering operation history
-        coi = [];       % clusters of interest, usually aka the selected clusters
-        cutCoords;      % a n-by-2 numeric array that stores the (t,y) coordinates of the cutting polygon
-        hCut;           % handle of the cutting polygon
-    end
     properties(Constant)
-        appTbColNames = {'clusId', 'group', 'depth', 'numSpikes', 'RPV', 'contam', 'SNR'};
-        noiseColor = [0 0 0] + .5;
-        maxClusOp = 5;
+        appTbColNames = {'clusId', 'group', 'depth', 'numSpikes', 'RPV', 'contam', 'SNR'}
+        noiseColor = [0 0 0] + .5
+        maxClusOp = 5
+%         featList = {'Amplitude', 'X-Position', 'PC1'};
+        featList = {'Amplitude', 'X-Position'};
     end
+    
+    properties
+        vm MTracerVM                % handle of the main app view-model
+        sr                          % object managing sorting results
+        om MTracer.OperationManager % object managing clustering operation history
+        plg MTracer.Polygon         % object managing spikes selection
+        coi = []                    % clusters of interest, usually aka the selected clusters
+        
+        waveFig                     % object of the waveform window
+        ccgFig                      % object of the CCG window
+        ftFig                       % a vector of objects for feature-time windows
+    end
+    
     properties(Dependent)
-        hasClus;
-        hasBin;
-        isShowNoise;
+        hasClus
+        hasBin
+        isShowNoise
     end
     methods
         function val = get.hasClus(this)
@@ -39,7 +46,17 @@ classdef ClusteringVM < handle
         % Object construction
         function this = ClusteringVM(vm, sr)
             % Constructor
+            
             this.vm = vm;
+            this.plg = MTracer.Polygon(vm);
+            
+            this.waveFig = MTracer.LayeredFigure();
+            
+            this.ccgFig = MTracer.LayeredFigure();
+            
+            this.ftFig = MTracer.LayeredFigure();
+            this.ftFig.name = this.featList{1};
+            
             if nargin > 1
                 this.sr = sr;
                 this.om = MTracer.OperationManager(this.GetStateData([], []));
@@ -47,10 +64,16 @@ classdef ClusteringVM < handle
             end
         end
         
-        function vmClus = Duplicate(this, vmApp)
+        function delete(this)
+            delete(this.waveFig);
+            delete(this.ccgFig);
+            delete(this.ftFig);
+        end
+        
+        function cvm = Duplicate(this, appvm)
             % Make a hard copy of the object
             
-            vmClus = MTracer.ClusteringVM(vmApp);
+            cvm = MTracer.ClusteringVM(appvm);
             
             if isempty(this.sr)
                 return
@@ -58,14 +81,17 @@ classdef ClusteringVM < handle
             
             % Make a hard copy
             srCopy = this.sr.Duplicate();
-
+            
             % Remove added columns
             isAdded = ismember(srCopy.clusTb.Properties.VariableNames, {'handle', 'memmap'});
             srCopy.clusTb(:,isAdded) = [];
-
-            vmClus.sr = srCopy;
-            vmClus.om = this.om;
-            vmClus.coi = this.coi;
+            
+            cvm.sr = srCopy;
+            cvm.om = this.om.Duplicate;
+            cvm.coi = this.coi;
+            cvm.waveFig = this.waveFig.Duplicate;
+            cvm.ccgFig = this.ccgFig.Duplicate;
+            cvm.ftFig = this.ftFig.Duplicate;
         end
         
         function SaveObject(this, filePath)
@@ -99,11 +125,6 @@ classdef ClusteringVM < handle
                 return
             end
             this.sr.ExportData(this.vm.ksFolder);
-        end
-        
-        function delete(this)
-            % Destructor
-            delete(this.hCut);
         end
         
         % Cluster operations
@@ -175,7 +196,7 @@ classdef ClusteringVM < handle
         function LabelClusters(this, newGroup)
             % Change the group label of specified clusters
             cid = this.coi;
-            if ~this.hasClus || numel(cid) < 1 || numel(cid) > this.maxClusOp
+            if ~this.hasClus || numel(cid) < 1
                 return
             end
             this.sr.LabelClusters(cid, newGroup);
@@ -208,7 +229,7 @@ classdef ClusteringVM < handle
             end
             
             spkInd = this.FindSpikesInPolygon();
-            this.ClearPolygon();
+            this.plg.ClearPolygon();
             if isempty(spkInd)
                 return
             end
@@ -264,32 +285,30 @@ classdef ClusteringVM < handle
         
         function spkInd = FindSpikesInPolygon(this)
             % Return row indices in spkTb for spikes encircled by the polygon
-            if isempty(this.coi) || size(this.cutCoords, 1) < 3
+            
+            if isempty(this.coi) || this.plg.numPoints < 3
                 spkInd = [];
                 return
             end
             m = ismember(this.sr.spkTb.clusId, this.coi);
             spkInd = find(m);
+            
+            % Get feature points
             xq = this.sr.spkTb.timeSec(spkInd);
-            yq = this.sr.spkTb.centCoords(spkInd,2);
-            xv = this.cutCoords(:,1);
-            yv = this.cutCoords(:,2);
-            in = inpolygon(xq, yq, xv, yv);
-            spkInd = spkInd(in);
-        end
-        
-        function SetPoint(this, tPt, yPt)
-            % Add a new point
-            this.cutCoords = [this.cutCoords; tPt yPt];
-            this.PlotPolygon();
-        end
-        
-        function RemoveLastPoint(this)
-            % Remove the last point
-            if size(this.cutCoords, 1) > 0
-                this.cutCoords(end,:) = [];
-                this.PlotPolygon();
+            switch this.plg.target
+                case 'X-Position'
+                    yq = this.sr.spkTb.centCoords(spkInd,1);
+                case 'Y-Position'
+                    yq = this.sr.spkTb.centCoords(spkInd,2);
+                case 'Amplitude'
+                    yq = this.sr.spkTb.tempAmp(spkInd);
+                otherwise
+                    error("'%s' is not a valid object name", this.plg.target);
             end
+            
+            % Find enclosed points
+            in = this.plg.IsInPolygon(xq, yq);
+            spkInd = spkInd(in);
         end
         
         % Interaction
@@ -362,13 +381,12 @@ classdef ClusteringVM < handle
             if app.AutoWaveformCheckBox.Value
                 this.PlotWaveform();
             end
-            if app.AutoAmpCheckBox.Value
-                this.PlotAmplitude();
+            if app.AutoFtCheckBox.Value
+                this.PlotFeatureTime();
             end
         end
         
         function UpdateAll(this)
-            % 
             this.UpdateCOI();
             this.UpdateAppClusTable();
         end
@@ -376,7 +394,7 @@ classdef ClusteringVM < handle
         function FindOnMap(this, cid)
             % Zoom to the selected cluster(s) in the Maps Window
             
-            if ~this.hasClus || ~this.vm.hasMapAxes
+            if ~this.hasClus || ~this.vm.isOpen
                 return
             end
             if nargin < 2 || isempty(cid)
@@ -392,12 +410,12 @@ classdef ClusteringVM < handle
             yWin = [min(yClus) max(yClus)] + [-1 1]*250;
             
             % Set ROI
-            this.vm.SetMapROI(this.vm.mapAxes.XLim, yWin);
+            this.vm.SetMapROI(this.vm.hAxes.XLim, yWin);
         end
         
         function FindInTable(this)
             % Select the cluster that's closest in depth to the focus
-            if ~this.hasClus || ~this.vm.hasApp || ~this.vm.hasMapAxes
+            if ~this.hasClus || ~this.vm.hasApp || ~this.vm.isOpen
                 return
             end
             y = this.vm.app.ClusTable.Data.depth;
@@ -408,11 +426,41 @@ classdef ClusteringVM < handle
             this.UpdateAll();
         end
         
+        function NextFeature(this)
+            % Cycle to the next feature
+            featName = this.ftFig.name;
+            I = find(strcmp(featName, this.featList));
+            if I == numel(this.featList)
+                I = 0;
+            end
+            this.ftFig.name = this.featList{I+1};
+            this.PlotFeatureTime();
+        end
+        
+        function SetPoint(this, src, eventdata)
+            % Add or remove polygon vertex from the caller axes
+            
+            if ~strcmp(this.vm.mapMode, 'clustering')
+                return
+            end
+            
+            % Read mouse position
+            mousePos = get(src, 'CurrentPoint');
+            t = mousePos(1);
+            y = mousePos(3);
+            
+            if eventdata.Button == 1
+                this.plg.AddPoint(src, t, y);
+            elseif eventdata.Button == 3
+                this.plg.RemoveLastPoint();
+            end
+        end
+        
         % Plotting
         function PlotSpikes(this)
             % Plot all or selected clusters
             
-            if ~this.hasClus || ~this.vm.hasMapAxes
+            if ~this.hasClus || ~this.vm.isOpen
                 return
             end
             
@@ -459,17 +507,6 @@ classdef ClusteringVM < handle
                     c = this.noiseColor;
                 end
                 
-%                 % Add alpha to unselected clusters, with "mua" lighter than "good"
-%                 if strcmp(g, "good")
-%                     r = 0.4;
-%                 else % "mua"
-%                     r = 0.2;
-%                 end
-%                 if ~isHighlight(i)
-%                     w = ones(size(c));
-%                     c = r*c + (1-r)*w;
-%                 end
-                
                 % Make or update plot
                 if isempty(properties(h)) || ~isvalid(h) % placeholder does not have properties
                     % Get spike data
@@ -478,7 +515,7 @@ classdef ClusteringVM < handle
                     y = this.sr.spkTb.centCoords(m,2);
                     
                     % Plot spikes
-                    h = plot(this.vm.mapAxes, t, y, ...
+                    h = plot(this.vm.hAxes, t, y, ...
                         'Color', c, ...
                         'LineStyle', 'none', ...
                         'Marker', '.', ...
@@ -509,20 +546,15 @@ classdef ClusteringVM < handle
             
             % Save handles
             this.sr.clusTb.handle = hh;
-            this.vm.mapLayers.clusters = hh(isvalid(hh));
+            this.vm.layers.clusters = hh(isvalid(hh));
             
             % Initialize brush callback
-            brushObj = brush(this.vm.mapFig);
+            brushObj = brush(this.vm.hFig);
             brushObj.ActionPostCallback = @this.PlotBrushedSpikes;
         end
         
         function PlotBrushedSpikes(this, fig, axesStruct)
             % 
-            
-            if ~this.hasBin
-                warning('Cannot plot waveform as the binary file is not available.');
-                return
-            end
             
             % Find clusters and spikes to plot
             hh = axesStruct.Axes.Children;
@@ -554,37 +586,148 @@ classdef ClusteringVM < handle
             cc = cc(isBrushed,:);
             spkMask = spkMask(isBrushed);
             
-            % Create figure if absent
-            f = this.vm.waveFig;
-            if isempty(f) || ~isvalid(f)
-                f = MPlot.Figure( ...
-                    'Name', 'Waveform', ...
+            % Make plot
+            this.PlotWaveform(cid, spkMask);
+        end
+        
+        function PlotFeatureTime(this, cid, featName)
+            
+            if nargin < 3
+                featName = this.ftFig.name;
+            end
+            if nargin < 2
+                cid = this.coi;
+            end
+            if ~this.hasClus || isempty(cid) || numel(cid) > this.maxClusOp
+                return
+            end
+            
+            % Get figure and axes
+            if ~this.ftFig.isOpen
+                % Create figure and axes if absent
+                [f, ax] = this.ftFig.Open( ...
+                    'Name', 'Feature-Time', ...
                     'NumberTitle', 'off', ...
+                    'IntegerHandle', 'off', ...
                     'Menubar', 'none', ...
                     'Toolbar', 'figure', ...
-                    'IntegerHandle', 'off', ...
+                    'WindowKeyPressFcn', @(varargin) this.vm.KeyPress(varargin{:}), ...
+                    'WindowKeyReleaseFcn', @(varargin) this.vm.KeyRelease(varargin{:}), ...
+                    'WindowScrollWheelFcn', @(varargin) this.vm.Scroll(varargin{:}), ...
                     'Interruptible', 'off', ...
                     'BusyAction', 'cancel');
-                this.vm.waveFig = f;
-            end
-            f.Position(3) = 200 * numel(cid);
-            
-            ax = f.Children;
-            if isempty(ax) || ~isvalid(ax)
-                ax = MPlot.Axes(f);
+                
+                % Align new figure to the main map
+                f.Position(4) = 150; % height
+                if this.vm.isOpen
+                    inPos = this.vm.hFig.Position;
+                    outPos = this.vm.hFig.OuterPosition;
+                    f.Position([1 3]) = inPos([1 3]); % origin x, width
+                    f.Position(2) = sum(outPos([2 4])); % origin y
+                    
+                    mainPos = this.vm.hAxes.Position;
+                    ax.Position([1 3]) = mainPos([1 3]);
+                end
+            else
+                ax = this.ftFig.hAxes;
             end
             hold(ax, 'off');
             
-            this.sr.PlotClusterWaveform(cid, 50, spkMask, 'NumChannels', 10, 'Color', cc, 'Axes', ax);
-            ax = MPlot.Axes(gca);
-            ax.Title.String = ['Cluster ' num2str(cid(:)')];
+            % Get feature data
+            switch featName
+                case 'Amplitude'
+                    feat = this.sr.spkTb.tempAmp;
+                    yLabel = featName + " (au)";
+                case 'X-Position'
+                    feat = this.sr.spkTb.centCoords(:,1);
+                    yLabel = 'X-Position (um)';
+%                 case 'PC1'
+%                     feat = cellfun(@(x) x(16,1), this.sr.spkTb.pcWeights);
+%                     yLabel = featName + " (au)";
+                otherwise
+                    error("'%s' is not a valid feature name", featName);
+            end
+            
+            % Plot through clusters
+            cTb = this.sr.clusTb;
+            hh = cell(size(cid));
+            for i = 1 : numel(cid)
+                % Get cluster info
+                k = find(cTb.clusId == cid(i));
+                g = cTb.group(k);
+                if strcmp(g, 'noise')
+                    c = this.noiseColor; % overwrite the color of 'noise' cluster
+                else
+                    c = cTb.color(k,:);
+                end
+                
+                if ~cTb.numSpikes(k)
+                    continue
+                end
+                
+                % Get spike data
+                m = this.sr.spkTb.clusId == cid(i);
+                t = this.sr.spkTb.timeSec(m);
+                y = feat(m);
+                
+                % Plot spikes
+                h = plot(ax, t, y, ...
+                    'Color', c, ...
+                    'LineStyle', 'none', ...
+                    'Marker', '.', ...
+                    'MarkerSize', this.vm.spikeMarkerSize, ...
+                    'HitTest', 'off');
+                hold(ax, 'on');
+                
+                % Label line object
+                h.UserData.clusId = cid(i);
+                h.UserData.group = g;
+                h.UserData.color = c;
+                hh{i} = h;
+            end
+            
+            % Save handles
+            this.ftFig.layers.clusters = [hh{:}];
+            
+            % Tag axes by the feature name
+            ax.Tag = featName;
+            
+            MPlot.Axes(ax);
+            if this.vm.isOpen
+                ax.XLim = this.vm.hAxes.XLim;
+            end
+            ax.TickLength(1) = 0.002;
+            ax.XTickLabels = [];
+            ax.YLabel.String = yLabel;
+            ax.LooseInset = [0 0 0 0];
+            
+            % Mouse button callback
+            ax.ButtonDownFcn = @this.SetPoint;
+            ax.BusyAction = 'cancel';
+            
+            % Initialize brush callback
+            brushObj = brush(this.ftFig.hFig);
+            brushObj.ActionPostCallback = @this.PlotBrushedSpikes;
         end
         
-        function PlotWaveform(this, cid)
+        function UpdateSpikeMarkerSize(this, sz)
+            % Update spike marker size in feature-time figures
+            if this.ftFig.isOpen
+                hh = this.ftFig.layers.clusters;
+                for i = 1 : numel(hh)
+                    hh(i).MarkerSize = sz;
+                end
+            end
+        end
+        
+        function PlotWaveform(this, cid, spkMask)
             
             if ~this.hasBin
-                warning('Cannot plot waveform as the binary file is not available.');
+                fprintf('Cannot plot waveform since the binary file is not available.\n');
                 return
+            end
+            if nargin < 3
+                spkMask = [];
             end
             if nargin < 2
                 cid = this.coi;
@@ -593,29 +736,20 @@ classdef ClusteringVM < handle
                 return
             end
             
-            f = this.vm.waveFig;
-            if isempty(f) || ~isvalid(f)
-                % Create figure if absent
-                f = MPlot.Figure( ...
-                    'Name', 'Waveform', ...
-                    'NumberTitle', 'off', ...
-                    'Menubar', 'none', ...
-                    'Toolbar', 'none', ...
-                    'IntegerHandle', 'off', ...
-                    'Interruptible', 'off', ...
-                    'BusyAction', 'cancel');
-                this.vm.waveFig = f;
-            end
+            [f, ax] = this.waveFig.Open( ...
+                'Name', 'Waveform', ...
+                'NumberTitle', 'off', ...
+                'Menubar', 'none', ...
+                'Toolbar', 'none', ...
+                'IntegerHandle', 'off', ...
+                'Interruptible', 'off', ...
+                'BusyAction', 'cancel');
+            
             f.Position(3) = 200 * numel(cid);
             
-            ax = f.Children;
-            if isempty(ax) || ~isvalid(ax)
-                ax = MPlot.Axes(f);
-            end
             hold(ax, 'off');
-            
-            this.sr.PlotClusterWaveform(cid, 50, 'NumChannels', 32, 'Color', this.GetClusterColor(cid), 'Axes', ax);
-            this.sr.PlotClusterTemplate(cid, 'Axes', ax);
+            this.sr.PlotClusterWaveform(cid, 50, spkMask, 'NumChannels', 32, 'Color', this.GetClusterColor(cid), 'Axes', ax);
+%             this.sr.PlotClusterTemplate(cid, 'Axes', ax);
             ax.Title.String = ['Cluster ' num2str(cid(:)')];
             ax.LooseInset([2 4]) = [0 0];
         end
@@ -629,213 +763,16 @@ classdef ClusteringVM < handle
                 return
             end
             
-            f = this.vm.ccgFig;
-            if isempty(f) || ~isvalid(f)
-                % Create figure if absent
-                f = MPlot.Figure( ...
-                    'Name', 'Cross-correlograms', ...
-                    'NumberTitle', 'off', ...
-                    'Menubar', 'none', ...
-                    'Toolbar', 'none', ...
-                    'IntegerHandle', 'off', ...
-                    'Interruptible', 'off', ...
-                    'BusyAction', 'cancel');
-                this.vm.ccgFig = f;
-            end
+            f = this.ccgFig.Open( ...
+                'Name', 'Cross-correlograms', ...
+                'NumberTitle', 'off', ...
+                'Menubar', 'none', ...
+                'Toolbar', 'none', ...
+                'IntegerHandle', 'off', ...
+                'Interruptible', 'off', ...
+                'BusyAction', 'cancel');
             
             this.sr.PlotCCG(cid, 'Color', this.GetClusterColor(cid), 'ShowMetrics', true, 'Figure', f);
-        end
-        
-        function PlotFeatureTime(this, cid, featName)
-            
-            if nargin < 2
-                cid = this.coi;
-            end
-            if ~this.hasClus || isempty(cid) || numel(cid) > this.maxClusOp
-                return
-            end
-            
-            f = this.vm.ftFig;
-            if isempty(f) || ~isvalid(f)
-                % Create figure if absent
-                f = MPlot.Figure( ...
-                    'Name', featName, ...
-                    'NumberTitle', 'off', ...
-                    'Menubar', 'none', ...
-                    'Toolbar', 'figure', ...
-                    'IntegerHandle', 'off', ...
-                    'Interruptible', 'off', ...
-                    'BusyAction', 'cancel');
-                this.vm.ftFig = f;
-                if this.vm.hasMapAxes
-                    f.Position([1 3]) = this.vm.mapFig.Position([1 3]);
-                    f.Position(4) = 150;
-                end
-            end
-            
-            ax = f.Children;
-            if isempty(ax) || ~isvalid(ax)
-                ax = axes(f);
-            end
-            hold(ax, 'off');
-            
-            cTb = this.sr.clusTb;
-            for i = 1 : numel(cid)
-                % Get cluster info
-                k = find(cTb.clusId == cid(i));
-                g = cTb.group(k);
-                if strcmp(g, 'noise')
-                    c = this.noiseColor; % overwrite the color of 'noise' cluster
-                else
-                    c = cTb.color(k,:);
-                end
-                
-                if ~cTb.numSpikes(k)
-                    continue
-                end
-                
-                % Get spike data
-                m = this.sr.spkTb.clusId == cid(i);
-                t = this.sr.spkTb.timeSec(m);
-                switch featName
-                    case 'Amplitude'
-                        a = this.sr.spkTb.tempAmp(m);
-                    case 'PC1'
-                        
-                    case 'PC2'
-                        
-                end
-                
-                % Plot spikes
-                h = plot(ax, t, a, ...
-                    'Color', c, ...
-                    'LineStyle', 'none', ...
-                    'Marker', '.', ...
-                    'MarkerSize', this.vm.spikeMarkerSize, ...
-                    'HitTest', 'off');
-                hold(ax, 'on');
-                
-                % Label line object
-                h.UserData.clusId = cid(i);
-                h.UserData.group = g;
-                h.UserData.color = c;
-            end
-            
-            MPlot.Axes(ax);
-            if this.vm.hasMapAxes
-                ax.XLim = this.vm.mapAxes.XLim;
-            end
-            ax.TickLength(1) = 0.002;
-            ax.YLabel.String = 'Amplitude (au)';
-            ax.LooseInset = [0 0 0 0];
-            
-            % Initialize brush callback
-            brushObj = brush(this.vm.ampFig);
-            brushObj.ActionPostCallback = @this.PlotBrushedSpikes;
-        end
-        
-        function PlotAmplitude(this, cid)
-            
-            if nargin < 2
-                cid = this.coi;
-            end
-            if ~this.hasClus || isempty(cid) || numel(cid) > this.maxClusOp
-                return
-            end
-            
-            f = this.vm.ampFig;
-            if isempty(f) || ~isvalid(f)
-                % Create figure if absent
-                f = MPlot.Figure( ...
-                    'Name', 'Amplitude', ...
-                    'NumberTitle', 'off', ...
-                    'Menubar', 'none', ...
-                    'Toolbar', 'figure', ...
-                    'IntegerHandle', 'off', ...
-                    'Interruptible', 'off', ...
-                    'BusyAction', 'cancel');
-                this.vm.ampFig = f;
-                if this.vm.hasMapAxes
-                    f.Position([1 3]) = this.vm.mapFig.Position([1 3]);
-                    f.Position(4) = 150;
-                end
-            end
-            
-            ax = f.Children;
-            if isempty(ax) || ~isvalid(ax)
-                ax = axes(f);
-            end
-            hold(ax, 'off');
-            
-            cTb = this.sr.clusTb;
-            for i = 1 : numel(cid)
-                % Get cluster info
-                k = find(cTb.clusId == cid(i));
-                g = cTb.group(k);
-                if strcmp(g, 'noise')
-                    c = this.noiseColor; % overwrite the color of 'noise' cluster
-                else
-                    c = cTb.color(k,:);
-                end
-                
-                if ~cTb.numSpikes(k)
-                    continue
-                end
-                
-                % Get spike data
-                m = this.sr.spkTb.clusId == cid(i);
-                t = this.sr.spkTb.timeSec(m);
-                a = this.sr.spkTb.tempAmp(m);
-                
-                % Plot spikes
-                h = plot(ax, t, a, ...
-                    'Color', c, ...
-                    'LineStyle', 'none', ...
-                    'Marker', '.', ...
-                    'MarkerSize', this.vm.spikeMarkerSize, ...
-                    'HitTest', 'off');
-                hold(ax, 'on');
-                
-                % Label line object
-                h.UserData.clusId = cid(i);
-                h.UserData.group = g;
-                h.UserData.color = c;
-            end
-            
-            MPlot.Axes(ax);
-            if this.vm.hasMapAxes
-                ax.XLim = this.vm.mapAxes.XLim;
-            end
-            ax.TickLength(1) = 0.002;
-            ax.YLabel.String = 'Amplitude (au)';
-            ax.LooseInset = [0 0 0 0];
-            
-            % Initialize brush callback
-            brushObj = brush(this.vm.ampFig);
-            brushObj.ActionPostCallback = @this.PlotBrushedSpikes;
-        end
-        
-        function PlotPolygon(this)
-            % Plot cluster cutting polygon
-            
-            if size(this.cutCoords, 1) < 1
-                return
-            end
-            
-            t = this.cutCoords([1:end 1],1);
-            y = this.cutCoords([1:end 1],2);
-            
-            ax = this.vm.mapAxes;
-            if isempty(this.hCut) || ~isvalid(this.hCut)
-                this.hCut = plot(ax, t, y, '-', 'LineWidth', 1, 'Color', [0 0 1]);
-            else
-                set(this.hCut, 'XData', t, 'YData', y);
-            end
-        end
-        
-        function ClearPolygon(this)
-            this.cutCoords = [];
-            delete(this.hCut);
         end
         
     end

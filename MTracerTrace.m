@@ -218,7 +218,7 @@ classdef MTracerTrace < handle
             end
             
             % Plot new
-            ax = this.vm.mapAxes;
+            ax = this.vm.hAxes;
             if isempty(this.hAnchor) || isempty(this.hInterp) || ~isvalid(this.hAnchor) || ~isvalid(this.hInterp)
                 cc = lines(7);
                 plotArgs = {'Color', cc(5,:), 'HitTest', 'off'};

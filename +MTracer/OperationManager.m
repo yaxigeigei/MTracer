@@ -3,14 +3,18 @@ classdef OperationManager < handle
     %   Detailed explanation goes here
     
     properties
-        stateTb table;
-        actionTb table;
-        isVerbose = true;
+        stateTb table
+        actionTb table
+        isVerbose = true
     end
     
     methods
         function this = OperationManager(stateData)
             % OperationManager Construct an instance of this class
+            
+            if nargin < 1
+                return
+            end
             
             % Initilize state table
             tb = table;
@@ -30,6 +34,13 @@ classdef OperationManager < handle
             if this.isVerbose
                 disp(this.actionTb);
             end
+        end
+        
+        function om = Duplicate(this)
+            om = MTracer.OperationManager();
+            om.stateTb = this.stateTb;
+            om.actionTb = this.actionTb;
+            om.isVerbose = this.isVerbose;
         end
         
         function AddOperation(this, stateData)
