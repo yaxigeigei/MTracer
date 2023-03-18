@@ -31,6 +31,12 @@ classdef SortingResult < handle
         % Data IO
         function [W, chWins, tmWins] = ExtractWaveform(this, spkInd, varargin)
             % Extract waveform for the given spike indices (not spike time indices)
+            % 
+            %   [W, chWins, tmWins] = ExtractWaveform(spkInd)
+            %   [W, chWins, tmWins] = ExtractWaveform(..., 'NumSamples', 82)
+            %   [W, chWins, tmWins] = ExtractWaveform(..., 'NumChannels', 32)
+            %   [W, chWins, tmWins] = ExtractWaveform(..., 'ChunkSize', 1e4)
+            % 
             
             p = inputParser();
             p.addParameter('NumSamples', 82, @(x) isscalar(x) && isnumeric(x));
@@ -81,7 +87,10 @@ classdef SortingResult < handle
         end
         
         function WriteSpikeAudio(this, fileName, cid, tWin)
-            % Extract spike waveform and plot 
+            % Write spike waveforms to an audio file
+            % 
+            %   WriteSpikeAudio(fileName, cid, tWin)
+            % 
             
             % Audio specs
             Fs = 44100;
@@ -156,8 +165,8 @@ classdef SortingResult < handle
         function spkXY = ComputeWaveformCenter(this, spkInd)
             % Compute centroids of spike waveform
             % 
-            %	ComputeWaveformCenter()
-            %	ComputeWaveformCenter(spkInd)
+            %	spkXY = ComputeWaveformCenter()
+            %	spkXY = ComputeWaveformCenter(spkInd)
             % 
             
             if nargin < 2 || isempty(spkInd)
@@ -206,8 +215,8 @@ classdef SortingResult < handle
         function spkXY = ComputeWaveformCenterRecon(this, spkInd)
             % Compute centroids from denoised (reverse PCA) spike waveform
             % 
-            %	ComputeWaveformCenter()
-            %	ComputeWaveformCenter(spkInd)
+            %	spkXY = ComputeWaveformCenterRecon()
+            %	spkXY = ComputeWaveformCenterRecon(spkInd)
             % 
             
             if nargin < 2 || isempty(spkInd)
