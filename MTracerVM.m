@@ -86,7 +86,9 @@ classdef MTracerVM < MTracer.LayeredFigure
             elseif this.hasLFP
                 val = [0 str2double(this.lfMeta.fileTimeSecs)];
             elseif this.clustering.hasClus
-                val = this.clustering.sr.rezLite.ops.trange;
+                ops = this.clustering.sr.rezLite.ops;
+                val = ops.trange;
+                val(2) = min(val(2), ops.tend / ops.fs);
             else
                 val = [0 1e4];
             end
@@ -335,7 +337,7 @@ classdef MTracerVM < MTracer.LayeredFigure
         end
         
         function LoadClusResults(this, ksDir)
-            % Load clustering results using NP.KilosortResults class
+            % Load clustering results using MTracer.KilosortResult class
             
             if nargin < 2 || isempty(ksDir)
                 ksDir = MBrowse.Folder([], 'Please select the Kilosort output folder');
@@ -658,7 +660,7 @@ classdef MTracerVM < MTracer.LayeredFigure
             load(filePath, 'cfg');
             
             if this.hasApp && ~isempty(cfg.layout.app.figPos)
-                this.app.UIFigure.Position = cfg.layout.app.figPos;
+                this.app.UIFigure.Position(1:2) = cfg.layout.app.figPos(1:2);
             end
             this.positions = cfg.layout.main;
             this.clustering.ftFig.positions = cfg.layout.ftFig;

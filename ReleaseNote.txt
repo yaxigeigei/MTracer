@@ -1,9 +1,49 @@
-MTracer v0.1.4
-Remove NP.KilosortResult.ComputeBasicStats. Basic cluster stats such as numSpikes is now computed in any cluster metrics functions (i.e. ComputeContamStats and ComputeWaveformStats).
-Add NP.KilosortResult.LabelClusters for assigning cluster groups.
-All clusters now have unique and immutable cluster IDs. Change MergeClusters and CutClusters accordingly.
+MTracer v0.16
 
-MTracer v0.1.3
+App
+Map type view models now inherit from MTracer.LayeredFigure super class, providing greater scalability and functionalities.
+Window layout is automatically remembered and can be saved to a configuration file to be loaded and reused.
+Fix an issue caused by the upper time limit in metadata being Inf.
+
+Clustering
+The Amplitude window is now a part of Feature-Time window which can show additional spike features as a function of time. The shortcut 'f' cycles through different features. Currently only includes amplitude and x-centroid.
+Cluster cutting can be performed in all feature windows.
+Improved logic when assigning cluster colors to minimize overlay.
+Add the Recolor button to manually resolve overlapping colors.
+In the Wavefrom window, if channels overlap in y, they will be displayed with x offsets to avoid overlap.
+Display waveform from all 32 channels instead of 10. Randomly sample 30 waveforms per cluster instead of 50.
+
+
+
+MTracer v0.15
+Implement auto tracing with two example tracers.
+NP.KilosortResult can be loaded but will be resaved as a MTracer.KilosortResult object.
+Fix the inclusion of the external ManyFunMatlab package.
+
+
+
+MTracer v0.14
+
+Tracing
+Interpolated traces are plotted as continuous curves without limitation of maximal time gap.
+Add a property, y0, in NP.MotionInterpolant which specifies the reference depths. In the constructor, users can specify the reference time, t0, at which y0 should be used. If no data is available at t0, the closest time point will be used.
+
+Clustering
+Created a new view-model to handle clustering.
+Manage operation history with OperationManager class.
+All clusters now have unique and immutable cluster IDs. Changed MergeClusters and CutClusters accordingly.
+Refactor classes into the scope of MTracer.
+Refactor kr (KilosortResult) to sr (SortingResult) for future generalization.
+Add NP.KilosortResult.LabelClusters for assigning cluster groups.
+Remove NP.KilosortResult.ComputeBasicStats. Basic cluster stats such as numSpikes is now computed in any cluster metrics functions (i.e. ComputeContamStats and ComputeWaveformStats).
+Handle all-NaN templates from Kilosort. Spikes associated with such templates are removed.
+Fixed the issue where the path of temp_wh.dat becomes invalid on different computers.
+Process waveform in batches to reduce memory use. Still slow overall. Further work needed.
+Compute mean waveform from 10 channels instead of 32.
+
+
+
+MTracer v0.13
 Cache the raw spike map and the computed clustering results.
 Add an option for choosing the data source (imec.ap.bin or temp_wh.dat) for AP traces.
 Can read incomplete curation results.

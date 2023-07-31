@@ -67,7 +67,9 @@ classdef LayeredFigure < handle
             if ~this.isOpen
                 f = MPlot.Figure(varargin{:});
                 f.SizeChangedFcn = @this.FigureSizeChanged;
-                ax = axes(f);
+                tl = tiledlayout(f, 1, 1);
+                tl.Padding = 'tight';
+                ax = nexttile(tl);
                 this.hFig = f;
                 this.hAxes = ax;
                 this.ApplyLayout();
@@ -81,9 +83,6 @@ classdef LayeredFigure < handle
             % Apply figure and axes layout
             if ~this.isOpen
                 return
-            end
-            if ~isempty(this.axPos)
-                this.hAxes.Position = this.axPos;
             end
             if ~isempty(this.figPos)
                 this.hFig.Position = this.figPos;
@@ -99,7 +98,7 @@ classdef LayeredFigure < handle
         function ToggleLayer(this, num)
             % Toggle layer on and off
             if num < 1 || num > numel(this.layerNames)
-                fprintf("Cannot toggle layer #%s because it does not exist.\n", num);
+                fprintf("Cannot toggle layer %i because it does not exist.\n", num);
                 return
             end
             hh = this.layers.(this.layerNames{num});

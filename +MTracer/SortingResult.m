@@ -11,6 +11,9 @@ classdef SortingResult < handle
         samplingRate = 30e3;
         sampleOffset = 0;
         pcBases;
+        
+        RP = 1.5e-3;                % refractory period in sec, within which refractory period violation occurs
+        activePrct = 99;            % percentile interspike-interval, below which the period of time is deemed active
     end
     
     methods
@@ -21,7 +24,7 @@ classdef SortingResult < handle
         
         function sr = Duplicate(this)
             % Make a hard copy of the object
-            sr = NP.SortingResult();
+            sr = MTracer.SortingResult();
             p = properties(this);
             for i = 1 : numel(p)
                 sr.(p{i}) = this.(p{i});
@@ -130,7 +133,7 @@ classdef SortingResult < handle
             audiowrite(fileName, wAud, Fs);
         end
         
-        % Computing
+        % Metrics
         function ComputeAll(this)
             % Compute all metrics for all clusters
             
@@ -138,26 +141,8 @@ classdef SortingResult < handle
             disp('Computing spiking metrics');
             this.ComputeContamStats([]);
             
-%             % Compute wavefrom centeroids
-%             disp('Localizing spikes');
-%             this.ComputeWaveformCenter([]);
-            
-%             % Extract and cache center waveform in batches
-%             nSpk = height(this.spkTb);
-%             batchSize = 1e5; % number of spikes
-%             nBatches = ceil(nSpk/batchSize);
-%             centW = cell(nBatches, 1);
-%             for i = 1 : nBatches
-%                 fprintf('Batch %i/%i\n', i, nBatches);
-%                 spkInd = (i-1)*batchSize+1 : min(i*batchSize, nSpk);
-%                 centW{i} = this.ExtractWaveform(spkInd, 'NumChannels', 10);
-%             end
-%             centW = cat(3, centW{:});
-            
             % Compute cluster waveform metrics
             disp('Computing waveform metrics');
-%             [centW, chWin, tmWin] = this.ExtractWaveform([], 'NumChannels', 10);
-%             this.ComputeWaveformStats([], centW, chWin);
             this.ComputeWaveformStats();
             this.ComputeClusterDepth();
         end
@@ -192,9 +177,6 @@ classdef SortingResult < handle
                 
                 % Find spikes that use this template
                 isSpk = sTb.tempId == tid;
-%                 if ~any(isSpk)
-%                     continue
-%                 end
                 
                 % Read waveform
                 [W, chWin] = this.ExtractWaveform(isSpk, 'NumChannels', 32);
@@ -259,7 +241,6 @@ classdef SortingResult < handle
                 for k = size(spkP,3) : -1 : 1
                     W(:,:,k) = B * spkP(:,:,k);
                 end
-%                 W = pagemtimes(B, P(:,:,isSpk));
                 W = permute(W, [2 1 3]); % to channel-by-time-by-spike
                 
                 % Find channel coordinates
@@ -316,9 +297,9 @@ classdef SortingResult < handle
             %   numSpikes           The number of spikes.
             %   isiEdges            Bin edges of inter-spike interval (ISI) histogram in seconds.
             %   isiCount            Spike count of ISI histogram.
-            %   RPV                 Refractory period violation rate (%). The RP threshold is NP.Param.minISI.
+            %   RPV                 Refractory period violation rate (%).
             %   meanActiveRate      Mean spike rate when unit is active.
-            %   activeThreshold     The threshold for active firing, computed from NP.Param.activePrct.
+            %   activeThreshold     The threshold for active firing.
             %   contam              Contamination rate (%) (Hill, Mehta and Kleinfeld, J Neuro, 2011).
             %
             
@@ -338,7 +319,7 @@ classdef SortingResult < handle
                 
                 % Compute comtamination
                 tSpk = this.spkTb.timeInd(m) / 30e3;
-                s = NP.Unit.ComputeContamStats(tSpk);
+                s = this.IComputeContamStats(tSpk);
                 
                 % Add results to table
                 fns = fieldnames(s);
@@ -353,6 +334,47 @@ classdef SortingResult < handle
             end
             
             this.clusTb = tb;
+        end
+        
+        function s = IComputeContamStats(this, tSpk)
+            % Compute unit quality metrics about contamination
+            % 
+            %   s = IComputeContamStats(tSpk)
+            % 
+            % Input
+            %   tSpk                A vector of spike times.
+            % 
+            % Output
+            %   Struct s with the following fields
+            %   s.isiEdges          Bin edges of inter-spike interval (ISI) histogram in seconds.
+            %   s.isiCount          Spike count of ISI histogram.
+            %   s.RPV               Refractory period violation rate (%).
+            %   s.meanActiveRate    Mean spike rate when unit is active.
+            %   s.activeThreshold   The threshold for active firing, computed from the activePrct property.
+            %   s.contam            Contamination rate (%) (Hill, Mehta and Kleinfeld, J Neuro, 2011).
+            %
+            
+            % Compute inter-spike intervals
+            tSpk = unique(tSpk); % remove merging artifacts - Kilosort or Phy's bug?
+            isi = diff(tSpk);
+            
+            % ISI histogram and the rate of refractory period violation (RPV)
+            tEdges = 0 : 0.5e-3 : 0.02;
+            nISI = histcounts(isi, [tEdges Inf]);
+            RPV = sum(nISI(tEdges < this.RP)) / numel(isi);
+            s.isiEdges = tEdges;
+            s.isiCount = nISI(1:end-1);
+            s.RPV = RPV * 100;
+            
+            % Contamination rate
+            r = 1 ./ isi;
+            th = 1 / prctile(isi, this.activePrct);
+            isActive = r > th;
+            rMeanActive = sum(isActive) / sum(isi(isActive));
+            c = MNeuro.ClusterContamination(RPV, rMeanActive, this.RP);
+            s.meanActiveRate = rMeanActive;
+            s.activeThreshold = th;
+            s.contam = c * 100;
         end
         
         function ComputeWaveformStats(this, cid, wf, chWins)
@@ -749,6 +771,10 @@ classdef SortingResult < handle
             
             W = cell(size(cid));
             
+            xc = this.chanTb.xcoords;
+            xc = xc - min(xc);
+            xc = xc / max([xc; eps]) * 3;
+            
             for k = 1 : nClus
                 % Find spike indices
                 spkMask = this.spkTb.clusId==cid(k);
@@ -771,18 +797,27 @@ classdef SortingResult < handle
                 w(end+1,:,:) = NaN;
                 [nTm, nCh, nW] = size(w);
                 
+                % Make time coordinates
+                t = ((0:nTm-1)'-nTm/2) / 30; % convert to millisecond
+                T = repmat(t, [1 nCh nW]);
+                
                 % Scale waveform and add depth
                 for i = 1 : nW
                     chInd = chWins(i,1) : chWins(i,2);
+                    
+                    % Scale waveform and add depth
                     y = this.chanTb.ycoords(chInd);
                     w(:,:,i) = w(:,:,i)*3/250 + y(:)';
+                    
+                    % Offset x
+                    if numel(y) == numel(unique(y))
+                        tShift = (k-1)*3;
+                    else
+                        x = xc(chInd);
+                        tShift = (k-1)*3 * numel(unique(x)) + x(:)';
+                    end
+                    T(:,:,i) = T(:,:,i) + tShift;
                 end
-                
-                % Make time coordinates
-                t = ((0:nTm-1)'-nTm/2) / 30; % convert to millisecond
-                tShift = (k-1)*3;
-                t = t + tShift;
-                T = repmat(t, [1 nCh nW]);
                 
                 % Compute transparency
                 a = min(1, 7.5/nW); % 7.5 is just a value that works fine for the visual
@@ -795,7 +830,7 @@ classdef SortingResult < handle
                 if isShowCentroids && ismember('centCoords', this.spkTb.Properties.VariableNames)
                     y = this.spkTb.centCoords(spkInd, 2);
                     t = zeros(size(y)) + tShift;
-                    plot(t, y, '.', 'Color', cc(k,:), 'MarkerSize', 8);
+                    plot(ax, t, y, '.', 'Color', cc(k,:), 'MarkerSize', 8);
                 end
             end
             MPlot.Axes(ax);
