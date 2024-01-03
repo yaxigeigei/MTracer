@@ -3,6 +3,248 @@ classdef MKilosort2
     %   Detailed explanation goes here
     
     methods(Static)
+        function varargout = Sort(varargin)
+            % Run spike sorting on a binary file. Results will be saved in the folder of .dat file.
+            % Auto merge is disabled and no intermediate data is saved. 
+            % 
+            %   MKilosort2.Sort()
+            %   MKilosort2.Sort(binFilePath)
+            %   MKilosort2.Sort(binFilePath, outFolder)
+            %   MKilosort2.Sort(..., 'ChannelMapFile', [])
+            %   MKilosort2.Sort(..., 'ConfigFunc', [])
+            %   rez = MKilosort.Sort(...)
+            % 
+            % Inputs
+            %   binFile             A binary file of extracellular recording data. If not specified, a file
+            %                       selection window will be prompted. 
+            %   outFolder           Kilosort output folder. 
+            %   
+            %   If either one of 'ChannelMapFunc' or 'ConfigFunc' is not provided, a dialog box will allow you 
+            %   to choose a probe type for the preset configuration and channel map. 
+            %   
+            %   'ChannelMapFile'    A function handle that takes the folder path of the .dat file as input 
+            %                       and saves a chanMap.mat file to that folder. Examples can be found in the 
+            %                       methods of this class (e.g. @MKilosort.SaveChanMapH3, modified from 
+            %                       createChannelMapFile.m in the configFiles folder of Kilosort repository). 
+            %   'ConfigFunc'        A function handle that takes the path of the .dat file as input and 
+            %                       returns a structure of options. Examples can be found in the methods of this 
+            %                       class (e.g. @MKilosort.Config64, modified from StandardConfig_MOVEME.m in 
+            %                       the configFiles folder of Kilosort repository).
+            % Output
+            %   rez                 The raw clustering results that Kilosort outputs. 
+            
+            % Parse inputs
+            p = inputParser();
+            p.KeepUnmatched = true;
+            p.addOptional('binFile', [], @(x) ischar(x) || isstring(x) || isempty(x));
+            p.addOptional('outFolder', [], @(x) ischar(x) || isstring(x) || isempty(x));
+            p.addParameter('ChannelMapFile', [], @(x) ischar(x) || isstring(x));
+            p.addParameter('ConfigFunc', [], @(x) isa(x, 'function_handle'));
+            p.addParameter('DriftMapOnly', false, @islogical);
+            p.parse(varargin{:});
+            binFile = char(p.Results.binFile);
+            outDir = char(p.Results.outFolder);
+            chanMapFile = p.Results.ChannelMapFile;
+            fConfig = p.Results.ConfigFunc;
+            isMapOnly = p.Results.DriftMapOnly;
+            
+            % Find the binary file
+            if isempty(binFile)
+                binFile = MBrowse.File([], 'Select a binary file', {'*.dat', '*.bin'});
+            end
+            if isempty(binFile)
+                return
+            end
+            
+            % Set the output folder
+            if isempty(outDir)
+                outDir = MBrowse.File([], 'Select the kilosort output folder');
+            end
+            if isempty(outDir)
+                return
+            end
+            if ~exist(outDir, 'dir')
+                mkdir(outDir);
+            end
+            
+            % Choose a preset configuration and channel map functions
+            if isempty(chanMapFile) || isempty(fConfig)
+                chanMapNames = {'NP1010_HalfCol'};
+                selected = listdlg( ...
+                    'PromptString', 'Select a preset configuration', ...
+                    'SelectionMode', 'single', ...
+                    'ListString', chanMapNames);
+                if isempty(selected)
+                    return;
+                end
+                
+                switch selected
+                    case 1
+                        chanMapFile = 'NP1_NHP_HalfCol_kilosortChanMap.mat';
+                        fConfig = @MKilosort2.Config384;
+                end
+            end
+            
+            % Duplicate channel map file to the output directory
+            copyfile(chanMapFile, fullfile(outDir, "chanMap.mat"));
+            
+            
+            % Get default options
+            ops.fbinary = binFile;
+            ops.fproc   = fullfile(outDir, 'temp_wh.dat'); % proc file on a fast SSD
+            ops.chanMap = char(chanMapFile);
+            ops.trange  = [0 Inf]; % time range to sort
+            ops.NchanTOT = 385; % total number of channels in your recording
+            ops = fConfig(ops);
+            
+            % Overwrite options from function args
+            opsNames = intersect(fieldnames(ops), fieldnames(p.Unmatched));
+            for k = 1 : numel(opsNames)
+                n = opsNames{k};
+                ops.(n) = p.Unmatched.(n);
+            end
+            
+            % Initialize GPU (will erase any existing GPU arrays)
+            gpuDevice(1);
+            
+            % Preprocess data and extract spikes for initialization
+            ResetGPU();
+            rez = preprocessDataSub(ops);
+            
+            % Save data for raw spike map
+            if isMapOnly
+                rez = datashift2(rez, 0); % last input is for shifting data
+                SaveRez(rez, outDir);
+                if nargout > 0
+                    varargout{1} = rez;
+                end
+                return
+            else
+                % NEW STEP TO DO DATA REGISTRATION
+                rez = datashift2(rez, 1); % last input is for shifting data
+            end
+            
+            % ORDER OF BATCHES IS NOW RANDOM, controlled by random number generator
+            iseed = 1;
+            
+            % main tracking and template matching algorithm
+            rez = learnAndSolve8b(rez, iseed);
+            
+            % OPTIONAL: remove double-counted spikes - solves issue in which individual spikes are assigned to multiple templates.
+            % See issue 29: https://github.com/MouseLand/Kilosort/issues/29
+            %rez = remove_ks2_duplicate_spikes(rez);
+            
+            % final merges
+            rez = find_merges(rez, 1);
+            
+            % final splits by SVD
+            rez = splitAllClusters(rez, 1);
+            
+            % decide on cutoff
+            rez = set_cutoff(rez);
+            
+            % eliminate widely spread waveforms (likely noise)
+            rez.good = get_good_units(rez);
+            
+            fprintf('found %d good units \n', sum(rez.good > 0))
+            
+            % write to Phy
+            fprintf('Saving results to Phy  \n')
+            rezToPhy(rez, outDir);
+            
+            % discard features in final rez file (too slow to save)
+            rez.cProj = [];
+            rez.cProjPC = [];
+            
+            % final time sorting of spikes, for apps that use st3 directly
+            [~, isort]   = sortrows(rez.st3);
+            rez.st3      = rez.st3(isort, :);
+            
+            % save rez.mat
+            SaveRez(rez, outDir);
+            
+            % save(fullfile(fpath, 'rez.mat'), 'rez', '-v7.3');
+            if nargout > 0
+                varargout{1} = rez;
+            end
+            
+            % Helper functions
+            function ResetGPU()
+                reset(parallel.gpu.GPUDevice.current);
+            end
+            function SaveRez(rez, outDir)
+                % Ensure all GPU arrays are transferred to CPU side before saving to .mat
+                rez_fields = fieldnames(rez);
+                for i = 1:numel(rez_fields)
+                    field_name = rez_fields{i};
+                    if(isa(rez.(field_name), 'gpuArray'))
+                        rez.(field_name) = gather(rez.(field_name));
+                    end
+                end
+                
+                % save final results as rez2
+                fprintf('Saving final results in rez  \n')
+                fname = fullfile(outDir, 'rez.mat');
+                save(fname, 'rez', '-v7.3');
+            end
+        end
+        
+        function ops = Config384(ops)
+            % 
+            
+            % sample rate
+            ops.fs = 30000;
+            
+            % frequency for high pass filtering (150)
+            ops.fshigh = 300;
+            
+            % threshold on projections (like in Kilosort1, can be different for last pass like [10 4])
+            ops.Th = [10 4];
+            
+            % how important is the amplitude penalty (like in Kilosort1, 0 means not used, 10 is average, 50 is a lot)
+            ops.lam = 10;
+            
+            % splitting a cluster at the end requires at least this much isolation for each sub-cluster (max = 1)
+            ops.AUCsplit = 0.9;
+            
+            % minimum spike rate (Hz), if a cluster falls below this for too long it gets removed
+            ops.minFR = 1/50;
+            
+            % number of samples to average over (annealed from first to second value)
+            ops.momentum = [20 400];
+            
+            % spatial constant in um for computing residual variance of spike
+            ops.sigmaMask = 30;
+            
+            % threshold crossings for pre-clustering (in PCA projection space)
+            ops.ThPre = 8;
+            
+            % spatial scale for datashift kernel
+            ops.sig = 20;
+            
+            % type of data shifting (0 = none, 1 = rigid, 2 = nonrigid)
+            ops.nblocks = 5;
+            
+            
+            % danger, changing these settings can lead to fatal errors
+            % options for determining PCs
+            ops.spkTh           = -6;      % spike threshold in standard deviations (-6)
+            ops.reorder         = 1;       % whether to reorder batches for drift correction.
+            ops.nskip           = 25;  % how many batches to skip for determining spike PCs
+            
+            ops.GPU                 = 1; % has to be 1, no CPU version yet, sorry
+            % ops.Nfilt               = 1024; % max number of clusters
+            ops.nfilt_factor        = 4; % max number of clusters per good channel (even temporary ones)
+            ops.ntbuff              = 64;    % samples of symmetrical buffer for whitening and spike detection
+            ops.NT                  = 64*1024+ ops.ntbuff; % must be multiple of 32 + ntbuff. This is the batch size (try decreasing if out of memory).
+            ops.whiteningRange      = 32; % number of channels to use for whitening each channel
+            ops.nSkipCov            = 25; % compute whitening matrix from every N-th batch
+            ops.scaleproc           = 200;   % int16 scaling of whitened data
+            ops.nPCs                = 3; % how many PCs to project the spikes into
+            ops.useRAM              = 0; % not yet available
+            
+        end
+        
         function [chanTb, chanTbKS] = LoadChanMap2Table(chanMapFile)
             % Load channel info from a channel map .mat file to a table
             % 

@@ -6,6 +6,19 @@ classdef MPlot
     end
     
     methods(Static)
+        function alpha = AlphaForOverlap(N)
+            % Find a good alpha transparency based on the number of overlapping traces
+            % 
+            %   alpha = MPlot.AlphaForOverlap(N)
+            % 
+            % Inputs
+            %   N           The number of overlapping traces (or other objects).
+            % Output
+            %   alpha       An optimal alpha transparency.
+            % 
+            alpha = MMath.Bound(1/log2(N), [0 1]);
+        end
+        
         function varargout = Axes(varargin)
             % Change Axes object with custom defaults
             switch numel(varargin)
@@ -369,6 +382,113 @@ classdef MPlot
             end
         end
         
+        function spArgs = FindSubplotInd(rows, cols, rowRange, colRange)
+            % Return subplot indices based on the requested layout
+            % 
+            %   spArgs = MPlot.FindSubplotInd(nRows, nCols, rowRange, colRange)
+            %   spArgs = MPlot.FindSubplotInd(rowDist, colDist, rowRange, colRange)
+            % 
+            % Inputs
+            %   nRows, nCols        Same as the first two inputs to the subplot function.
+            %                       Each row and column will be partitioned as a block.
+            %   rowDist, colDist    Numeric vector of integer numbers specifying how to 
+            %                       partition rows and columns into blocks following the 
+            %                       same convention as the mat2cell function.
+            %   rowRange, colRange  Vector of block row and column indiced indicating 
+            %                       where the plot will be placed. Note that the rows and 
+            %                       columns here refer to the partitioned blocks.
+            % Output
+            %   spArgs              A 1-by-3 cell array containing the three inputs to 
+            %                       the subplot function, e.g. ax = subplot(spArgs{:})
+            % 
+            % See also subplot, mat2cell
+            
+            if isscalar(rows)
+                rowDist = ones(rows, 1);
+            else
+                rowDist = rows;
+            end
+            if isscalar(cols)
+                colDist = ones(cols, 1);
+            else
+                colDist = cols;
+            end
+            nRow = sum(rowDist);
+            nCol = sum(colDist);
+            
+            if isempty(rowRange)
+                rowRange = 1 : numel(rowDist);
+            end
+            if isempty(colRange)
+                colRange = 1 : numel(colDist);
+            end
+            
+            grid = mat2cell(zeros(nRow, nCol), rowDist, colDist);
+            for i = rowRange(:)'
+                for j  = colRange(:)'
+                    grid{i,j}(:) = 1;
+                end
+            end
+            grid = cell2mat(grid);
+            spArgs = {nRow, nCol, find(grid')};
+        end
+        
+        function ntArgs = FindTileInd(rows, cols, rowRange, colRange)
+            % Return tile indices based on the requested layout
+            % 
+            %   ntArgs = MPlot.FindTileInd(nRows, nCols, rowRange, colRange)
+            %   ntArgs = MPlot.FindTileInd(rowDist, colDist, rowRange, colRange)
+            % 
+            % Inputs
+            %   nRows, nCols        Same as the first two inputs to the subplot function.
+            %                       Each row and column will be partitioned as a block.
+            %   rowDist, colDist    Numeric vector of integer numbers specifying how to 
+            %                       partition rows and columns into blocks following the 
+            %                       same convention as the mat2cell function.
+            %   rowRange, colRange  Vector of block row and column indiced indicating 
+            %                       where the plot will be placed. Note that the rows and 
+            %                       columns here refer to the partitioned blocks.
+            % Output
+            %   ntArgs              A 1-by-2 cell array containing the two inputs to 
+            %                       the nexttile function, e.g. ax = nexttile(ntArgs{:})
+            % 
+            % See also nexttile, mat2cell
+            
+            if isscalar(rows)
+                rowDist = ones(rows, 1);
+            else
+                rowDist = rows;
+            end
+            if isscalar(cols)
+                colDist = ones(cols, 1);
+            else
+                colDist = cols;
+            end
+            nRow = sum(rowDist);
+            nCol = sum(colDist);
+            
+            if isempty(rowRange)
+                rowRange = 1 : numel(rowDist);
+            end
+            if isempty(colRange)
+                colRange = 1 : numel(colDist);
+            end
+            
+            grid = mat2cell(zeros(nRow, nCol), rowDist, colDist);
+            for i = rowRange(:)'
+                for j  = colRange(:)'
+                    grid{i,j}(:) = 1;
+                end
+            end
+            grid = cell2mat(grid);
+            
+            k = find(grid', 1);
+            cSpan = sum(any(grid, 1));
+            rSpan = sum(any(grid, 2));
+            
+            ntArgs = {k, [rSpan cSpan]};
+        end
+        
         function Paperize(varargin)
             % Make axes comply with conventions of publication
             %
@@ -593,6 +713,175 @@ classdef MPlot
             end
         end
         
+        function PlotRasterStack(spk, varargin)
+            % Plot rasters from a spikeTime table (or its cell array) in one axes with stacking units
+            % 
+            %   MPlot.PlotRasterStack(spk)
+            %   MPlot.PlotRasterStack(spk, Y)
+            %   MPlot.PlotRasterStack(..., 'Color', [])
+            %   MPlot.PlotRasterStack(..., 'MarkUnits', [])
+            %   MPlot.PlotRasterStack(..., 'MarkTrials', [])
+            %   MPlot.PlotRasterStack(..., 'Parent', [])
+            % 
+            % Inputs
+            %   spk             1) A trial-by-unit table or cell array of spike time vectors.
+            %                   2) A unit-element cell array where each element is a nested trial-element 
+            %                      cell array of spike time vectors. This allows different units to 
+            %                      have different number of trials.
+            %   Y               A numeric vector for each raster's middle Y position.
+            %   'Color'         A unit-by-3 RGB or unit-by-4 RGBA array. If empty [], units alternate 
+            %                   colors between [0 0 0 .7] and [.3 .3 .3 .7].
+            %   'MarkUnits'     A vector of indices for units to be marked by dark red [.8 0 0 1].
+            %   'MarkTrials'    A vector of indices for trials to be marked by dark red [.8 0 0 1].
+            %   'Parent'        Axes object to plot in.
+            
+            p = inputParser();
+            p.addOptional('Y', 1:size(spk,2), @(x) isnumeric(x));
+            p.addParameter('Color', [], @(x) true);
+            p.addParameter('MarkUnits', [], @isnumeric);
+            p.addParameter('MarkTrials', [], @isnumeric);
+            p.addParameter('Parent', [], @(x) isa(x, 'matlab.graphics.axis.Axes'));
+            p.parse(varargin{:});
+            Y = p.Results.Y;
+            unit_c = p.Results.Color;
+            indMU = p.Results.MarkUnits;
+            indMT = p.Results.MarkTrials;
+            ax = p.Results.Parent;
+            
+            % Standardize input to nested cell array
+            if istable(spk)
+                spk = spk{:,:};
+            end
+            if ~iscell(spk{1}) && ~isempty(spk{1})
+                [n_trials, n_units] = size(spk);
+                spk = mat2cell(spk, n_trials, ones(1,n_units));
+            end
+            n_units = numel(spk);
+            
+            % Determine colors
+            if isempty(unit_c)
+                unit_c = repmat([0 0 0 .7; .3 .3 .3 .7], [ceil(n_units/2) 1]);
+            end
+            if ~isempty(indMU)
+                unit_c(indMU,:) = [.8 0 0 1]; % hightlight selected histograms in red
+            end
+            
+            % Setup axes
+            if isempty(ax)
+                ax = gca;
+            end
+            hold(ax, 'on');
+            
+            for i = 1 : n_units
+                u_spk = spk{i};
+                n_trials = numel(u_spk);
+                y = Y(i) - 0.5 + 1/(n_trials+2);
+                
+                for j = 1 : n_trials
+                    y = y + 1/(n_trials+2);
+                    
+                    spk_t = u_spk{j};
+                    spk_y = repelem(y, length(spk_t));
+                    spk_h = 1/(n_trials+2) * .8;
+                    
+                    if ~ismember(j, indMT)
+                        MPlot.PlotPointAsLine(spk_t, spk_y, spk_h, 'Color', unit_c(i,:), 'LineWidth', .5, 'Parent', ax);
+                    else
+                        MPlot.PlotPointAsLine(spk_t, spk_y, spk_h, 'Color', [.8 0 0 1], 'LineWidth', .5, 'Parent', ax);
+                    end
+                end
+            end
+            
+            ax.YLim = [.5, n_units+.5];
+            ax.YTick = 1 : n_units;
+            ax.YDir = 'reverse';
+            ax.XGrid = 'on';
+        end
+        
+        function PlotHistStack(t, hh, ee, varargin)
+            % Plot a stack of histograms in one axes
+            % 
+            %   MPlot.PlotHistStack(t, hh, ee)
+            %   MPlot.PlotHistStack(..., 'Scaling', 1)
+            %   MPlot.PlotHistStack(..., 'Style', 'trace')
+            %   MPlot.PlotHistStack(..., 'Color', [])
+            %   MPlot.PlotHistStack(..., 'MarkUnits', [])
+            %   MPlot.PlotHistStack(..., 'Parent', [])
+            % 
+            % Inputs
+            %   t               A trials-by-units table or a cell array of spike time vectors.
+            %   hh              A trials-by-units table or a cell array of spike time vectors.
+            %   ee              A trials-by-units table or a cell array of spike time vectors.
+            %   'Scaling'       
+            %   'Style'         
+            %   'Color'         A units-by-3 RGB or units-by-4 RGBA array. If empty [], units alternate 
+            %                   colors between [0 0 0] and [.3 .3 .3].
+            %   'MarkUnits'     A vector of indices for units to be marked by dark red [.8 0 0 1].
+            %   'Parent'        Axes object to plot in.
+            
+            p = inputParser();
+            p.addParameter('Color', [], @(x) true);
+            p.addParameter('Scaling', 1, @(x) isnumeric(x) && isscalar(x));
+            p.addParameter('Style', 'trace', @(x) ismember(x, {'trace', 'bar'}));
+            p.addParameter('MarkUnits', [], @isnumeric);
+            p.addParameter('Parent', [], @(x) isa(x, 'matlab.graphics.axis.Axes'));
+            p.parse(varargin{:});
+            unit_c = p.Results.Color;
+            frac = p.Results.Scaling;
+            style = p.Results.Style;
+            indMU = p.Results.MarkUnits;
+            ax = p.Results.Parent;
+            
+            if isempty(ax)
+                ax = gca;
+            end
+            
+            % Scale heights
+            hh = hh * frac;
+            ee = ee * frac;
+            
+            % Determine colors
+            n_units = size(hh, 2);
+            if isempty(unit_c)
+                unit_c = repmat([0 0 0; .3 .3 .3], [ceil(n_units/2) 1]);
+            end
+            if ~isempty(indMU)
+                unit_c(indMU,:) = [.8 0 0]; % hightlight selected histograms in red
+            end
+            
+            % Prepare bins for bar plots
+            binSize = t(2) - t(1);
+            binEdges = t - binSize/2;
+            binEdges(end+1) = binEdges(end) + binSize;
+            
+            % Plotting
+            m = 0;
+            y = 0.5;
+            hold(ax, 'on');
+            
+            for i = 1 : n_units
+                m = m + 1;
+                switch style
+                    case 'bar'
+                        px = repelem(binEdges, 2);
+                        py = [0 repelem(hh(:,i)',2) 0];
+                        patch(ax, px, -py+y+1, unit_c(m,:), 'FaceAlpha', .1, 'EdgeColor', 'none');
+                    case 'trace'
+                        plot(ax, t, -hh(:,i)+y+1, 'Color', [unit_c(m,:) .5], 'LineWidth', 1);
+                        MPlot.ErrorShade(t, -hh(:,i)+y+1, ee(:,i), 'Color', unit_c(m,:), 'Alpha', 0.1, 'Parent', ax);
+                    otherwise
+                        error('%s is not a supported style', style);
+                end
+                y = y + 1;
+            end
+            
+            ax.YLim = [.5, n_units+.5];
+            ax.YTick = 1 : n_units;
+            ax.YDir = 'reverse';
+            ax.XGrid = 'on';
+%             ax.XMinorGrid = 'on';
+        end
+        
         function varargout = PlotTraceLadder(varargin)
             % Plot traces as a ladder
             % 
@@ -604,12 +893,12 @@ classdef MPlot
             %   hh = MPlot.PlotTraceLadder(...)
             % 
             % Inputs
-            %   yy                  1) A numeric vector of y coordinates that plots one trace.
-            %                       2) A matrix whose columns are 1).
-            %                       3) A cell array of 1). Vectors do not need to have the same length.
+            %   yy                  1) A numeric vector of y coordinates for a single trace.
+            %                       2) A matrix where each column is (1).
+            %                       3) A cell array of (1). Vectors do not need to have the same length.
             %   xx                  1) A vector of x coordinates that applies to all series in yy.
-            %                       2) A matrix of 1) as columns for individual series in yy.
-            %                       3) A cell array of 1) for individual series in yy.
+            %                       2) A matrix of (1) as columns for individual series in yy.
+            %                       3) A cell array of (1) for individual series in yy.
             %                       4) An empty array []. Use sample indices as x coordinates. 
             %   yPos                Y position of each trace's zero after shifting them into a ladder. 
             %   'ColorArray'        1) An n-by-3 array of RGB colors. 
@@ -674,7 +963,9 @@ classdef MPlot
             
             % Format yPos
             if isempty(yPos)
-                yPos = cumsum(-min(yy) + [0, max(yy(:,1:end-1))]);
+                dyPos = -min(yy) + [0, max(yy(:,1:end-1))];
+                dyPos(isnan(dyPos)) = median(dyPos, 'omitnan');
+                yPos = cumsum(dyPos);
             end
             yPos = yPos(:)';
             

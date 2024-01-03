@@ -7,8 +7,8 @@ classdef MNeuro
             %   ccg = MNeuro.CCG(tEdges, spkTrain1, spkTrain2, spkTrain3, ...)
             %
             % Inputs
-            %   tEdges          A vector of time bin, two-sided.
-            %   spkTrainN       A vector of spike time.
+            %   tEdges          A vector of bin edges, two-sided.
+            %   spkTrainN       A vector of spike times.
             % Output
             %   ccg             A [numTrain, numTrain, numBin] array of histograms. Each element 
             %                   stores the number of pairwise intervals between two spike trains 
@@ -72,6 +72,7 @@ classdef MNeuro
         function [centCoords, centInd, fv] = ComputeWaveformCenter(W, chanCoords, featType, locType)
             % Estimate the location of each waveform
             % 
+            %   [centCoords, centInd, fv] = MNeuro.ComputeWaveformCenter(W)
             %   [centCoords, centInd, fv] = MNeuro.ComputeWaveformCenter(W, chanCoords)
             %   [centCoords, centInd, fv] = MNeuro.ComputeWaveformCenter(W, chanCoords, featType)
             %   [centCoords, centInd, fv] = MNeuro.ComputeWaveformCenter(W, chanCoords, featType, locType)
@@ -90,11 +91,14 @@ classdef MNeuro
             %   fv              c-by-1-by-n array of feature values.
             % 
             
+            if nargin < 4 || isempty(locType)
+                locType = 'centroid';
+            end
             if nargin < 3 || isempty(featType)
                 featType = 'power';
             end
-            if nargin < 4 || isempty(locType)
-                locType = 'centroid';
+            if nargin < 2 || isempty(chanCoords)
+                chanCoords = (1:size(W,1))';
             end
             
             switch lower(featType)
@@ -104,6 +108,8 @@ classdef MNeuro
                     fv = max(W, [], 2) - min(W, [], 2);
                 case 'computed'
                     fv = W;
+                otherwise
+                    error("'%s' is not a valid feature type", featType);
             end
             
             switch lower(locType)
@@ -395,7 +401,8 @@ classdef MNeuro
             % Outputs
             %   mm              An array of mean event rates. Rows are time bins and columns are 
             %                   different types of event. 
-            %   ee              Standard error or CI of elements in mm. 
+            %   se              Standard error of mm, in the same array size.
+            %   ci              Confidence interval of mm, in a samples-by-signals-by-2 array.
             %   stats           A table with the following variables.
             %     colNum          Column index of each event in T.
             %     pkIdx           Index of the time bin where each trace in mm peaks.
@@ -445,8 +452,8 @@ classdef MNeuro
         function [mm, ee, stats] = MeanTimeSeries(S, varargin)
             % Compute mean and related stats of multiple time series across repetitions
             %
-            %   [mm, ee, stats] = MNeuro.MeanTimeSeries(S)
-            %   [mm, ee, stats] = MNeuro.MeanTimeSeries(S, ciArgs)
+            %   [mm, se, stats] = MNeuro.MeanTimeSeries(S)
+            %   [mm, ci, stats] = MNeuro.MeanTimeSeries(S, ciArgs)
             %
             % Inputs
             %   S               A cell array or a table of time series vectors. Rows are repeats 
@@ -456,7 +463,8 @@ classdef MNeuro
             % Outputs
             %   mm              An array of mean time series. Rows are samples and columns are for 
             %                   different signals. 
-            %   ee              Standard error or CI of elements in mm. 
+            %   se              Standard error of mm, in the same array size.
+            %   ci              Confidence interval of mm, in a samples-by-signals-by-2 array.
             %   stats           A table with the following variables.
             %     colNum          Column index of each signal in T.
             %     pkIdx           Index of the time bin where each trace in mm peaks.
@@ -486,9 +494,9 @@ classdef MNeuro
                 
                 % Compute mean and error
                 if numel(varargin) > 0
-                    [m, ~, ~, e] = MMath.MeanStats(s, varargin{:});
+                    [m, ~, ~, e] = MMath.MeanStats(s, 1, varargin{:});
                 else
-                    [m, ~, e] = MMath.MeanStats(s);
+                    [m, ~, e] = MMath.MeanStats(s, 1);
                 end
                 mm(:,i) = m';
                 ee(:,i,:) = e';
@@ -503,7 +511,7 @@ classdef MNeuro
             stats.pkIdx = pkIdx';
             stats.pkVal = pkVal';
             stats.pkProb = NaN(size(pkVal'));
-            stats.AUC = sum(mm)';
+            stats.AUC = sum(mm,1)';
             stats.entropy = I';
         end
         
@@ -515,23 +523,24 @@ classdef MNeuro
             %   tunings = MNeuro.Tuning(stimuli, response)
             %   tunings = MNeuro.Tuning(..., 'mask', logicals)
             %   tunings = MNeuro.Tuning(..., 'numBins', value)
-            %   tunings = MNeuro.Tuning(..., 'rmMethod', options)
-            %   tunings = MNeuro.Tuning(..., 'rmParam', params)
+            %   tunings = MNeuro.Tuning(..., 'rmMethod', 'none')
+            %   tunings = MNeuro.Tuning(..., 'rmParam', NaN)
+            %   tunings = MNeuro.Tuning(..., 'tfParam', NaN)
             %   
-            % Inputs:
-            %   stimuli         Data of stimuli (each column is one stimulus)
+            % Inputs
+            %   stimuli         A numeric matrix of stimuli (each column is one stimulus).
             %   response        Array of spike rates corresponding to the stimuli.
             %   'mask'          Numeric or cell array of binary indices used to mask data. (default is no masking)
             %   'numBins'       Number of bins used to group the stimuli range (default is 50)
             %   'rmMethod'      A string (or a cell array of strings) specifying the method of outlier removal for 
-            %                   all (or individual) stimulus variable (default 'percentile', other methods include
-            %                   'std', 'whisker', 'cut'). See help of MMath.RemoveOutliers() for more details. 
-            %   'rmParam'       Parameter(s) for outlier removal (default NaN, no outlier removal). You may provide an array of row 
-            %                   vectors that specify parameters for individual stimulus variables. See the help
-            %                   of MMath.RemoveOutliers() for more details. 
-            % Output:
-            %   tunings         Cell array of tuning curves, each contains 4 column vectors - bin centers, 
-            %                   mean firing rate, standard error of the mean, and number of samples - from 1 to 4.
+            %                   all (or individual) stimulus variable (default 'none')
+            %   'rmParam'       Parameter(s) for outlier removal (default NaN). You may provide an array of row 
+            %                   vectors that specify parameters for individual stimulus variables. See the help 
+            %                   of rmoutliers for more details. 
+            %   'tfParam'       Parameter for a percentile-based exponential binning.
+            % Output
+            %   tunings         Cell array of tuning curves, each contains a 4-column matrix [bin centers, 
+            %                   mean response, SEM, and the number of samples].
             
             % Handles user inputs
             p = inputParser();
@@ -539,7 +548,7 @@ classdef MNeuro
             p.addRequired('response');
             p.addParameter('mask', []);
             p.addParameter('numBins', 50, @isscalar);
-            p.addParameter('rmMethod', 'percentile');
+            p.addParameter('rmMethod', 'none');
             p.addParameter('rmParam', NaN, @isnumeric);
             p.addParameter('tfParam', NaN, @isnumeric);
             p.parse(varargin{:});
@@ -552,9 +561,9 @@ classdef MNeuro
             tfParam = p.Results.tfParam;
             
             if size(stim,1) ~= length(resp)
-                error([ 'The length of stimuli does not match with that of the spike rates. ', ...
+                error(['The length of stimuli does not match with that of the spike rates. ', ...
                     'If you are not using the full length of stimuli, ', ...
-                    'the corresponding array of spike rates needs to be provided.' ]);
+                    'the corresponding array of spike rates needs to be provided.']);
             end
             
             % Propagates settings
@@ -600,32 +609,33 @@ classdef MNeuro
             % Computes for each stimulus
             for i = size(stim,2) : -1 : 1
                 % Removes outliers in the stimulus vector and corresponding entries in response vector
-                [ stimClean, indKeep ] = MMath.RemoveOutliers(stim(:,i), rmParam(i,:), rmMethod{i});
-                respClean = resp(indKeep);
+                S = stim(:,i);
+                R = resp;
+                if rmMethod{i} ~= "none"
+                    [S, indRm] = rmoutliers(S, rmMethod{i}, rmParam(i,:));
+                    R = resp(~indRm);
+                end
                 
                 % Bining response by stimulus value ranges
-                edges = linspace(min(stimClean), max(stimClean), numBins(i)+1);
-                centers = mean([ edges(1:end-1); edges(2:end) ]);
-                [ ~, binInd ] = histc(stimClean, edges);
-                for j = length(edges)-1 : -1 : 1
-                    ratesVect = respClean(binInd == j);
-                    numSample = numel(ratesVect);
-                    if numSample == 0
-                        meanSpikeRate = 0;
-                        steSpikeRate = 0;
+                centers = linspace(min(S), max(S), numBins(i));
+                edges = MMath.BinCenters2Edges(centers);
+                [spN, ~, binInd] = histcounts(S, edges);
+                for j = numel(spN) : -1 : 1
+                    if spN(j) == 0
+                        meanR(j) = 0;
+                        sdR(j) = 0;
                     else
-                        meanSpikeRate = nanmean(ratesVect);
-                        steSpikeRate = MMath.StandardError(ratesVect);
+                        r = R(binInd == j);
+                        [m, sd] = MMath.MeanStats(r);
+                        meanR(j) = m;
+                        sdR(j) = sd;
                     end
-                    binNumSample(j) = numSample;
-                    binMeanSpikeRate(j) = meanSpikeRate;
-                    binSteSpikeRate(j) = steSpikeRate;
                 end
                 
                 % Transforms axes back
                 centers = fi{i}(centers);
                 
-                tunings{i,1} = [ centers; binMeanSpikeRate; binSteSpikeRate; binNumSample ]';
+                tunings{i,1} = [centers; meanR; sdR; spN]';
             end
         end
         

@@ -73,7 +73,11 @@ for k = 1 : width(tbIn)
     if isa(tbIn.(k), 'cell')
         tbOut.(varName) = winCells(:,k);
     elseif all(cellfun(@isscalar, winCells(:,k)))
-        tbOut.(varName) = cat(1, winCells{:,k});
+        try % this is a hack to handle different datatype
+            tbOut.(varName) = cat(1, winCells{:,k});
+        catch
+            tbOut.(varName) = winCells(:,k);
+        end
     else
         tbOut.(varName) = winCells(:,k);
     end
@@ -114,12 +118,10 @@ function winData = ISliceEtFillBleed(tbIn, tWin, rowInd, tRef)
 isOldVer = verLessThan('matlab', '9.1');
 tAbs = cell(size(tbIn));
 for i = 1 : width(tbIn)
-    if isnumeric(tbIn{:,i})
-        tAbs(:,i) = num2cell(double(tbIn{:,i}) + tRef);
-    elseif iscell(tbIn{:,i})
+    if iscell(tbIn{:,i})
         tAbs(:,i) = cellfun(@(x,r) double(x)+r, tbIn{:,i}, num2cell(tRef), 'Uni', false);
     else
-        error('Cannot convert relative time with this data format');
+        tAbs(:,i) = num2cell(double(tbIn{:,i}) + tRef);
     end
 end
 for i = 1 : numel(tAbs)

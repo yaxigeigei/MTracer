@@ -11,6 +11,7 @@ classdef MSpikeGLX
             if nargin < 1 || isempty(metaPath)
                 metaPath = MBrowse.File();
             end
+            metaPath = char(metaPath);
             [folderPath, baseName] = fileparts(metaPath);
             meta = MSpikeGLX.ReadMeta([baseName '.meta'], folderPath);
         end
@@ -19,6 +20,7 @@ classdef MSpikeGLX
             % 
             
             % Read metadata
+            niPath = char(niPath);
             [folderPath, baseName] = fileparts(niPath);
             meta = MSpikeGLX.ReadMeta([baseName '.meta'], folderPath);
             
@@ -53,6 +55,7 @@ classdef MSpikeGLX
             % 
             
             % Read metadata
+            lfPath = char(lfPath);
             [folderPath, baseName] = fileparts(lfPath);
             meta = MSpikeGLX.ReadMeta([baseName '.meta'], folderPath);
             

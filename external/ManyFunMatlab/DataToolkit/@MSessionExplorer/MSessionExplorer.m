@@ -27,31 +27,31 @@ classdef MSessionExplorer < handle
     % See also MSessionExplorer.Event, MPlot, MPlotter, MMath
     
     properties(Constant)
-        supportedTableTypes = ... % 'eventTimes', 'eventValues', 'timeSeries' (read-only)
+        supportedTableTypes = ...   % 'eventTimes', 'eventValues', 'timeSeries' (read-only)
             {'eventTimes', 'eventValues', 'timeSeries'};
     end
     properties(GetAccess = public, SetAccess = private)
-        tot;                    % A table of data tables, reference times and related metadata (read-only)
+        tot                         % A table of data tables, reference times and related metadata (read-only)
     end
     properties
-        userData;               % A struct where user stores arbitrary data
+        userData                    % A struct where user stores arbitrary data
     end
     properties(Dependent)
-        tableNames;             % A cell array of table names (read-only)
-        isEventTimesTable;      % Whether each table is eventTimes table (read-only)
-        isEventValuesTable;     % Whether each table is eventValues table (read-only)
-        isTimesSeriesTable;     % Whether each table is timeSeries table (read-only)
-        numEpochs;              % The number of epochs (read-only)
+        tableNames                  % A cell array of table names (read-only)
+        isEventTimesTable           % Whether each table is eventTimes table (read-only)
+        isEventValuesTable          % Whether each table is eventValues table (read-only)
+        isTimesSeriesTable          % Whether each table is timeSeries table (read-only)
+        numEpochs                   % The number of epochs (read-only)
     end
     properties
-        epochInd;               % Indices of epoch
-        isVerbose = true;       % Whether or not to display progress and some warnings
+        epochInd                    % Indices of epoch
+        isVerbose logical = true    % Whether or not to display progress and some warnings
     end
     properties(Access = private)
-        originalTrialInd;       % for backward compatibility
+        originalTrialInd            % for backward compatibility
     end
     properties(Dependent, Hidden)
-        numTrials;              % for backward compatibility
+        numTrials                   % for backward compatibility
     end
     
     % These methods are exposed to users
@@ -137,7 +137,7 @@ classdef MSessionExplorer < handle
         end
         
         function se = Duplicate(this, varargin)
-            % Make a deep copy of the current object
+            % Make a hard copy of the current object
             % 
             %   se = Duplicate()
             %   se = Duplicate(tbNames)
@@ -174,7 +174,7 @@ classdef MSessionExplorer < handle
             tbInd = cellfun(@(x) find(strcmp(x, this.tableNames)), tbNames);
             
             % Copying
-            se = MSessionExplorer();
+            se = eval(class(this));
             se.isVerbose = this.isVerbose;
             for i = tbInd(:)'
                 se.SetTable(this.tableNames{i}, this.tot.tableData{i}, this.tot.tableType{i}, this.tot.referenceTime{i});
@@ -191,7 +191,7 @@ classdef MSessionExplorer < handle
             %   se = Merge(se1, se2, se3, ...)
             % 
             % Inputs
-            %   se1, se2, se3, ...      Arbitrary number of MSessionExplorer objects. 
+            %   se1, se2, se3, ...      Arbitrary number of MSessionExplorer objects or object arrays
             % Output
             %   se                      The merged MSessionExplorer object
             
@@ -203,17 +203,22 @@ classdef MSessionExplorer < handle
             this = seArray(1); % handle the case where the input "this" is a vector
             
             % Output SE
-            se = MSessionExplorer();
+            se = eval(class(this));
             se.isVerbose = this.isVerbose;
             
             % Concatenate and set each table
             for i = 1 : numel(this.tableNames)
+                % Get all tables of the same name
                 tbName = this.tableNames{i};
-                tbData = arrayfun(@(x) x.GetTable(tbName), seArray, 'Uni', false);
-                tbData = cat(1, tbData{:});
+                tbs = arrayfun(@(x) x.GetTable(tbName), seArray, 'Uni', false);
+                
+                % Concatenation
+                tbCat = this.ICatTables(tbs, this.isTimesSeriesTable(i));
+                
+                % Set table to merged se
                 refTime = arrayfun(@(x) x.GetReferenceTime(tbName), seArray, 'Uni', false);
                 refTime = cat(1, refTime{:});
-                se.SetTable(tbName, tbData, this.tot.tableType{i}, refTime);
+                se.SetTable(tbName, tbCat, this.tot.tableType{i}, refTime);
             end
             
             % Add incremented epoch indices
@@ -222,13 +227,127 @@ classdef MSessionExplorer < handle
             epInd(2:end) = cellfun(@(x,y) x + y, num2cell(cumNumEp(1:end-1)), epInd(2:end), 'Uni', false);
             se.epochInd = cat(1, epInd{:});
             
-            % Add user data
-            se.userData = arrayfun(@(x) x.userData, seArray, 'Uni', false);
-            try
-                se.userData = cat(1, se.userData{:});
-            catch
-                warning('Not all userData have the same fields thus were stored into a cell array');
+            % Add all userdata in a struct array, filling any missing fields with []
+            ud = arrayfun(@(x) x.userData, seArray, 'Uni', false);
+            isEptUd = cellfun(@isempty, ud);
+            if all(isEptUd)
+                return
+            else
+                ud(isEptUd) = repmat({struct}, sum(isEptUd));
             end
+            fdNames = cellfun(@fieldnames, ud, 'Uni', false);
+            uniFdNames = unique(cat(1, fdNames{:}), 'stable');
+            for i = 1 : numel(ud)
+                for j = 1 : numel(uniFdNames)
+                    fn = uniFdNames{j};
+                    if ~isfield(ud{i}, fn)
+                        ud{i}.(fn) = [];
+                    end
+                end
+            end
+            se.userData = cat(1, ud{:});
+        end
+        
+        function seArray = Split(this, epochArg, isSplitUserData)
+            % Split epochs of a MSessionExplorer object to individual objects
+            % 
+            %   seArray = Split(epochDist)
+            %   seArray = Split(epochInd)
+            %   seArray = Split(..., isSplitUserData)
+            % 
+            % Inputs
+            %   epochDist       An n-element numeric vector for the numbers of epochs to split. 
+            %                   This is similar to rowDist in MATLAB's mat2cell function.
+            %   epochInd        A cell array where each element is a vector of epoch indices.
+            % Output
+            %   seArray         A vector of MSessionExplorer objects.
+            %
+            % See also mat2cell
+            
+            if nargin < 3
+                isSplitUserData = true;
+            end
+            
+            % Convert epochDist to epochInd
+            if isnumeric(epochArg)
+                epDist = epochArg(:);
+                epB = cumsum(epDist);
+                epA = [0; epB(1:end-1)] + 1;
+                epInd = arrayfun(@(a,b) (a:b)', epA, epB, 'Uni', false);
+            else
+                epInd = epochArg;
+            end
+            
+            % Initialize se objects with userData
+            for k = numel(epInd) : -1 : 1
+                seArray(k) = eval(class(this)); % inheritance compatible construction
+                seArray(k).isVerbose = this.isVerbose;
+                if isSplitUserData && numel(this.userData) == numel(epInd)
+                    seArray(k).userData = this.userData(k);
+                else
+                    seArray(k).userData = this.userData;
+                end
+            end
+            
+            % Add tables
+            for i = 1 : numel(this.tableNames)
+                tbName = this.tableNames{i};
+                tb = this.GetTable(tbName);
+                rt = this.GetReferenceTime(tbName);
+                for k = 1 : numel(seArray)
+                    m = epInd{k};
+                    if isempty(rt)
+                        seArray(k).SetTable(tbName, tb(m,:), this.tot.tableType{i});
+                    else
+                        seArray(k).SetTable(tbName, tb(m,:), this.tot.tableType{i}, rt(m));
+                    end
+                end
+            end
+            
+            seArray = reshape(seArray, size(epochArg));
+        end
+        
+        function seTb = SplitConditions(this, condVars, sourceTbName)
+            % Split an SE into a table of SEs by conditions in the behavValue table
+            % Trials with NaN condition will be excluded except for opto
+            % 
+            %   seTb = SplitConditions(condVars)
+            %   seTb = SplitConditions(condVars, sourceTbName)
+            % 
+            % Inputs
+            %   condVars        1) One or more table column names. Conditions are defined by every unique conbination across 
+            %                      the values of these variables.
+            %                   2) A table with condition variables as columns.
+            %                   3) An empty [] variable. A condition variable called dummyCond will be used to group all epochs 
+            %                      in one condition.
+            %   sourceTbName    The name of the table to find columns specified by condVars.
+            %   
+            
+            % Construct grouping table
+            if isempty(condVars)
+                % Initialize table with a dummy grouping variable that includes all epochs in one group
+                dummyCond = ones(se.numEpochs, 1);
+                T = table(dummyCond);
+            elseif istable(condVars)
+                % Condition variables are provided as a table
+                T = condVars;
+            else
+                % Get and modify variables from the specified table
+                tb = this.GetTable(sourceTbName);
+                T = tb(:, condVars);
+            end
+            assert(height(T)==this.numEpochs, "The number of rows of the condVars table must match the number of epochs.");
+            
+            % Find epoch indices for each group
+            [condId, seTb] = findgroups(T);
+            for i = 1 : max(condId)
+                m = condId==i;
+                seTb.epochInd{i} = find(m);
+                seTb.numEpochs(i) = sum(m);
+            end
+            
+            % Split se
+            seTb.se = this.Split(seTb.epochInd);
         end
         
         function s = ToStruct(this)
@@ -272,11 +391,12 @@ classdef MSessionExplorer < handle
             
             % Handle user input
             p = inputParser();
-            p.addRequired('tbName', @ischar);
+            p.addRequired('tbName', @(x) ischar(x) || (isscalar(x) && isstring(x)));
             p.addRequired('tb', @istable);
             p.addOptional('tableType', [], @(x) any(strcmp(x, this.supportedTableTypes)));
             p.addOptional('referenceTime', [], @isnumeric);
             p.parse(tbName, tb, varargin{:});
+            tbName = char(tbName);
             tbType = p.Results.tableType;
             refTimes = p.Results.referenceTime;
             
@@ -366,15 +486,15 @@ classdef MSessionExplorer < handle
             %   tbNames         A string or cell array of the name(s) of table which reference time is 
             %                   set to. The default is empty and rt is set to all eligible tables.
             
-            rt = rt(:);
-            if ~all(diff(rt) > 0)
-                warning('Reference times are not monotonically increasing');
-            end
-            
             if nargin < 3
                 tbNames = this.tableNames(~this.isEventValuesTable);
             end
             this.IValidateTableNames(tbNames, true);
+            
+            rt = rt(:);
+            if ~all(diff(rt) > 0)
+                disp('Reference times are not monotonically increasing');
+            end
             
             tbNames = cellstr(tbNames);
             for i = 1 : numel(tbNames)
@@ -435,7 +555,7 @@ classdef MSessionExplorer < handle
         function colData = GetColumn(this, tbName, colIDs)
             % Return specific columns from a data table
             %
-            %   colData = GetColumn(tbName, colNames)
+            %   colData = GetColumn(tbName, colIDs)
             %
             % Inputs
             %   tbName          The name of a table that contains the columns of interest. 
@@ -502,6 +622,37 @@ classdef MSessionExplorer < handle
             else
                 % Set values
                 tb{:,colIDs} = colData;
+            end
+            
+            this.tot{tbName, 'tableData'}{1} = tb;
+        end
+        
+        function Column2Cell(this, tbName, colIDs)
+            % Force columns to be cell arrays
+            %
+            %   Column2Cell(tbName)
+            %   Column2Cell(tbName, colIDs)
+            %
+            % Inputs
+            %   tbName          The name of a table that contains the columns of interest.
+            %   colIDs          1) Column name(s) as a string or a cell array of strings.
+            %                   2) Integer or logical indices of column.
+            %                   3) If this is not provided or empty, all columns will be included.
+            
+            this.IValidateTableName(tbName, true);
+            tb = this.tot{tbName, 'tableData'}{1};
+            
+            if nargin < 3 || isempty(colIDs)
+                colIDs = 1 : width(tb);
+            end
+            
+            colInd = this.IValidateColumnIndexing(tb, colIDs);
+            for k = 1 : numel(colInd)
+                C = tb.(colInd(k));
+                if ~iscell(C)
+                    C = num2cell(C);
+                end
+                tb.(colInd(k)) = C;
             end
             
             this.tot{tbName, 'tableData'}{1} = tb;
@@ -705,6 +856,7 @@ classdef MSessionExplorer < handle
             %   tbOut = ResampleTimeSeries(tbIn, tEdges, rowInd, colInd)
             %   tbOut = ResampleTimeSeries(..., 'Method', 'linear')
             %   tbOut = ResampleTimeSeries(..., 'Method', 'linear', 'Extrapolation', 'none')
+            %   tbOut = ResampleTimeSeries(..., 'Antialiasing', false)
             % 
             % Inputs
             %   tbIn            A table of time series data or a name of a timeSeries table in the current object.
@@ -720,6 +872,12 @@ classdef MSessionExplorer < handle
             %   'Method' and 'Extrapolation'
             %                   Use these Name-Value pairs to customize the behavior of interpolation. Please see 
             %                   options of the MATLAB griddedInterpolant function for details. 
+            %   'Antialiasing'  Whether or not to resample with antialiasing filters (default is false). 
+            %                   If tEdges do not have uniform bin sizes, the antialiasing targets the frequency 
+            %                   determined by the smallest bin size. 
+            %                   Antialiasing is always ignored when upsampling, or (in the case of non-uniform 
+            %                   sampling) when the largest bin size of the query is smaller than the smallest 
+            %                   sample duration of the timeseries to be resampled.
             % Output
             %   tbOut           The output table of time series data where each value is the number of occurance. 
             %
@@ -730,14 +888,16 @@ classdef MSessionExplorer < handle
             p.addRequired('tbIn', @(x) ischar(x) || istable(x));
             p.addRequired('tEdges', @(x) iscell(x) || isnumeric(x));
             p.addOptional('rowInd', [], @(x) isnumeric(x) || islogical(x));
-            p.addOptional('colInd', [], @(x) isnumeric(x) || islogical(x) || iscellstr(x));
+            p.addOptional('colInd', [], @(x) isnumeric(x) || islogical(x) || ischar(x) || iscellstr(x) || isstring(x));
             p.addParameter('Method', 'linear');
             p.addParameter('Extrapolation', 'none');
+            p.addParameter('Antialiasing', false, @islogical);
             p.parse(tbIn, tEdges, varargin{:});
             rowInd = p.Results.rowInd;
             colInd = p.Results.colInd;
             interpMethod = p.Results.Method;
             extrapMethod = p.Results.Extrapolation;
+            isAA = p.Results.Antialiasing;
             
             % Get table
             if ~istable(tbIn)
@@ -754,18 +914,38 @@ classdef MSessionExplorer < handle
             % Validate and standardize time edges
             tEdges = this.IValidateTimeEdges(tEdges, height(tbIn), rowInd);
             
-            % Interpolate time series
-            tbOut = tbIn(rowInd, colInd);
+            % Select rows and columns
+            tbIn = tbIn(rowInd, colInd);
             tEdges = tEdges(rowInd);
-            for i = 1 : height(tbOut)
-                t = tbOut.time{i};
+            
+            % Interpolate time series
+            tbOut = tbIn;
+            for i = 1 : height(tbIn)
+                % Get timestamps
+                t = tbIn.time{i};
                 tq = tEdges{i}(1:end-1) + diff(tEdges{i})/2;
                 tbOut.time{i} = tq;
-                for j = 2 : width(tbOut)
-                    v = tbOut.(j){i};
+                
+                if isAA && numel(t) > 1
+                    % Find input and query sampling frequency for antialiasing
+                    maxFs = 1 / min(diff(t));
+                    minFsq = 1 / max(diff(tEdges{i}));
+                end
+                
+                for j = 2 : width(tbIn)
+                    t = tbIn.time{i};
+                    v = tbIn.(j){i};
                     dtype = class(v);
+                    
+                    % Antialiasing
+                    if isAA && sum(~isnan(v)) > 1 && minFsq < maxFs
+                        [v, t] = resample(double(v), t, minFsq, 'Dimension', 1);
+                    end
+                    
+                    % Interpolation
                     F = griddedInterpolant(t, double(v), interpMethod, extrapMethod);
                     v = F(tq);
+                    
                     tbOut.(j){i} = cast(v, dtype);
                 end
             end
@@ -801,7 +981,7 @@ classdef MSessionExplorer < handle
             p.addRequired('tbIn', @(x) ischar(x) || istable(x));
             p.addRequired('tEdges', @(x) iscell(x) || isnumeric(x));
             p.addOptional('rowInd', [], @(x) isnumeric(x) || islogical(x));
-            p.addOptional('colInd', [], @(x) isnumeric(x) || islogical(x) || iscellstr(x));
+            p.addOptional('colInd', [], @(x) isnumeric(x) || islogical(x) || ischar(x) || iscellstr(x) || isstring(x));
             p.addParameter('Normalization', 'count');
             p.parse(tbIn, tEdges, varargin{:});
             rowInd = p.Results.rowInd;
@@ -818,7 +998,6 @@ classdef MSessionExplorer < handle
             
             % Validate and standardize row and column indices
             [rowInd, colInd] = this.IValidateTableIndexing(tbIn, rowInd, colInd);
-            tbIn = tbIn(:,colInd);
             
             % Validate and standardize time edges
             tEdges = this.IValidateTimeEdges(tEdges, height(tbIn), rowInd);
@@ -845,6 +1024,7 @@ classdef MSessionExplorer < handle
         
         tbOut = SliceTimeSeries(this, tbIn, tWin, varargin)
         tbOut = SliceEventTimes(this, tbIn, tWin, varargin)
+        items = Plot(this, varargin)
     end
     methods(Static)
         [tb, preTb] = MakeTimeSeriesTable(t, s, varargin)
@@ -856,8 +1036,8 @@ classdef MSessionExplorer < handle
     methods(Hidden, Access = protected)
         function val = IValidateTableName(this, tbName, isAssert)
             % The table name must be a string
-            val = ischar(tbName);
-            assert(~isAssert || val, 'A table name must be a character array rather than %s.', class(tbName));
+            val = ischar(tbName) || (isstring(tbName) && isscalar(tbName));
+            assert(~isAssert || val, 'A table name must be char or a single string rather than %s.', class(tbName));
             if ~val
                 return;
             end
@@ -916,8 +1096,9 @@ classdef MSessionExplorer < handle
             elseif islogical(colInd)
                 % convert to numerical indices
                 colInd = find(colInd);
-            elseif iscellstr(colInd) 
+            elseif ischar(colInd) || iscellstr(colInd) || isstring(colInd)
                 % find column ind based on variable names
+                colInd = cellstr(colInd);
                 varNames = tb.Properties.VariableNames;
                 colNames = colInd;
                 for i = 1 : numel(colInd)
@@ -991,17 +1172,55 @@ classdef MSessionExplorer < handle
         end
         
         function C = ICatColumn(~, C, tRef)
-            if iscell(C)
-                % Cell vector of numeric array
-                if nargin > 2
-                    for i = 1 : numel(C)
-                        C{i} = C{i} + tRef(i);
-                    end
-                end
-                C = cat(1, C{:});
-            elseif nargin > 2
+            if nargin < 3
+                tRef = zeros(size(C));
+            end
+            if ~iscell(C)
                 % Numeric vector
                 C = C + tRef;
+            else
+                % Cell vector of numeric array
+                for i = 1 : numel(C)
+                    C{i} = C{i} + tRef(i);
+                end
+                C = cat(1, C{:});
+            end
+        end
+        
+        function tbCat = ICatTables(~, tbs, isTimeseries)
+            % Vertically concatenates tables and handles inconsistent column variable names.
+            % Each unique variable across tables will be a column in the concatenated table. 
+            % Missing parts will be filled with matching NaN arrays for timeseries tables 
+            % (i.e. isTimeseries == true), otherwise leaving automatic placeholder (e.g. []).
+            
+            if nargin < 3
+                isTimeseries = false;
+            end
+            
+            warning('off', 'MATLAB:table:RowsAddedExistingVars');
+            tbCat = table;
+            r = 0; % will store the end index of the last concatenated table
+            for i = 1 : numel(tbs)
+                vn = tbs{i}.Properties.VariableNames;
+                h = height(tbs{i});
+                for j = 1 : numel(vn)
+                    tbCat.(vn{j})(r+1:r+h) = tbs{i}.(vn{j}); % currently cannot assign inconsistent data type
+                end
+                r = r + h;
+            end
+            warning('on', 'MATLAB:table:RowsAddedExistingVars');
+            
+            if ~isTimeseries
+                return
+            end
+            nSp = cellfun(@numel, tbCat.time);
+            for c = 2 : width(tbCat)
+                nSig = max(cellfun(@(x) size(x,2), tbCat.(c)));
+                for r = 1 : height(tbCat)
+                    if isempty(tbCat.(c){r})
+                        tbCat.(c){r} = NaN(nSp(r), nSig);
+                    end
+                end
             end
         end
         

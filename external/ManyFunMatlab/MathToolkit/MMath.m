@@ -2,6 +2,42 @@ classdef MMath
     % MMath is a collection of functions useful for doing math and manipulating data
     
     methods(Static)
+        function edges = BinCenters2Edges(centers)
+            % Convert bin centers to bin edges
+            % 
+            %   edges = BinCenters2Edges(centers)
+            % 
+            % Input
+            %   centers             A numeric vector of n bin centers. n must be > 1.
+            % Output
+            %   edges               A numeric vector of n+1 bin edges
+            % 
+            assert(numel(centers) > 1, "Must provide more than one bin centers to derive the edges.");
+            isCol = iscolumn(centers);
+            if isCol
+                centers = centers';
+            end
+            hw = diff(centers) / 2;
+            edges = [centers(1)-hw(1), centers(2:end)-hw, centers(end)+hw(end)];
+            if isCol
+                edges = edges';
+            end
+        end
+        
+        function centers = BinEdges2Centers(edges)
+            % Convert bin edges to bin centers
+            % 
+            %   centers = BinEdges2Centers(edges)
+            % 
+            % Input
+            %   edges               A numeric vector of n bin edges. n must be > 1.
+            % Output
+            %   centers             A numeric vector of n-1 bin centers.
+            % 
+            assert(numel(edges) > 1, "Must provide more than one bin edges to derive the centers.");
+            centers = edges(2:end) - diff(edges)/2;
+        end
+        
         function [ci, bootstat] = BootCI(nboot, bootfun, varargin)
             % Bootstraps confidence interval as the built-in bootci function but supports hierarchical bootstrap
             %
@@ -94,6 +130,137 @@ classdef MMath
             for i = nboot : -1 : 1
                 testInd(:,i) = randsample(n, ntest);
                 trainInd(:,i) = setdiff(indList, testInd(:,i));
+            end
+        end
+        
+        function [pval, sig] = EstimatePval(X, null, varargin)
+            % Compute p-values from null distribution and the observed value(s)
+            % 
+            %   [pval, sig] = MMath.EstimatePval(X, null)
+            %   [pval, sig] = MMath.EstimatePval(X, null, 'Tail', 'two')
+            %   [pval, sig] = MMath.EstimatePval(X, null, 'AlphaList', [0.05 0.01 0.001])
+            %   [pval, sig] = MMath.EstimatePval(X, null, 'Method', 'gumbel')
+            % 
+            % Inputs
+            %   null            A vector or a matrix of column vectors. Each vector contains values sampled from 
+            %                   the null distribution for each value in X.
+            %   X               A scalar or vector of value(s) for test.
+            %   'Tail'          'left', 'right', or 'two' (default) tailed test.
+            %   'AlphaList'     A vector of significance levels. Default is [0.05 0.01 0.001].
+            %   'Method'        'gumbel' (default): calculate p-values for maximum value of N samples drawn from Gaussian.
+            %                   'empirical': calculate p-values using empirical quantiles.
+            % Output
+            %   pval            p-values in the same size as input x.
+            %   sig             Level of significance given alpha value.
+            % 
+            % Credits
+            %   Adapted from Montijn et al. eLife 2021, https://github.com/JorritMontijn/zetatest
+            %   
+            %   Version history:
+            %   1.0 - March 11 2020
+            %       Created by Jorrit Montijn
+            %   
+            %   Sources:
+            %   Baglivo (2005)
+            %   Elfving (1947), https://doi.org/10.1093/biomet/34.1-2.111
+            %   Royston (1982), DOI: 10.2307/2347982
+            %   https://stats.stackexchange.com/questions/394960/variance-of-normal-order-statistics
+            %   https://stats.stackexchange.com/questions/9001/approximate-order-statistics-for-normal-random-variables
+            %   https://en.wikipedia.org/wiki/Extreme_value_theory
+            %   https://en.wikipedia.org/wiki/Gumbel_distribution
+            %   
+            
+            p = inputParser;
+            p.addParameter('Method', 'gumbel', @(x) any(strcmpi(x, {'empirical', 'gumbel'})));
+            p.addParameter('AlphaList', [0.05 0.01 0.001], @(x) isnumeric(x));
+            p.addParameter('Tail', 'two', @(x) any(strcmpi(x, {'left', 'right', 'two'})));
+            p.parse(varargin{:});
+            method = p.Results.Method;
+            alphaList = p.Results.AlphaList;
+            tailMode = p.Results.Tail;
+            
+            % Standardize inputs
+            X = X(:)';
+            if isvector(null)
+                null = null(:);
+                if numel(X) > 1
+                    null = repmat(null, [1 numel(X)]);
+                end
+            end
+            assert(numel(X)==size(null,2), "The number of elements in 'X' does not match the number of columns in 'null'.");
+            
+            if strcmpi(method, 'empirical')
+                % Calculate statistical significance using empirical quantiles
+                pval = nan(size(X));
+                for i = 1 : numel(X)
+                    x = X(i);
+                    nullVec = unique(null(:,i));
+                    if numel(nullVec) == 1 && x == nullVec
+                        rk = NaN;
+                    elseif x < min(nullVec) || isnan(x)
+                        rk = 0;
+                    elseif x > max(nullVec) || isinf(x)
+                        rk = numel(nullVec);
+                    else
+                        rk = interp1(nullVec, 1:numel(nullVec), x);
+                    end
+                    pval(i) = rk / numel(nullVec);
+                end
+            else
+                % 
+                nullMu = mean(null, 1);
+                nullVar = var(null, 0, 1);
+                
+                % Define constants
+                % define Euler-Mascheroni constant
+                dblEulerMascheroni = 0.5772156649015328606065120900824; %vpa(eulergamma)
+                
+%                 % define apery's constant
+%                 dblApery = 1.202056903159594285399738161511449990764986292;
+                
+                % Define Gumbel parameters from mean and variance
+                % derive beta parameter from variance
+                dblBeta = (sqrt(6).*sqrt(nullVar))./(pi);
+                % dblSkewness = (12*sqrt(6)*dblApery)/(pi.^3);
+                
+                % Derive mode from mean, beta and E-M constant
+                dblMode = nullMu - dblBeta.*dblEulerMascheroni;
+                
+                % Define Gumbel cdf
+                fGumbelCDF = @(x) exp(-exp(-((x-dblMode)./dblBeta)));
+                
+                % Calculate output variables
+                % calculate cum dens at X
+                dblGumbelCDF = fGumbelCDF(X);
+                
+                % define p-value
+                pval = dblGumbelCDF; % originally pval = (1-dblGumbelCDF);
+%                 % transform to output z-score
+%                 Z = -norminv(pval/2);
+%                 
+%                 % approximation for large X
+%                 pval(isinf(Z)) = exp( (dblMode-X(isinf(Z)))./dblBeta );
+            end
+            
+            % Get significance level
+            alphaList = alphaList(:)'; % make row vector
+            switch tailMode
+                case 'two'
+                    m = pval > 0.5;
+                    pval(m) = 1 - pval(m);
+                    pval = pval(:) * 2;
+                    sig = pval < alphaList;
+                case 'left'
+                    sig = pval(:) < alphaList;
+                case 'right'
+                    pval = 1 - pval;
+                    sig = pval(:) < alphaList;
+                otherwise
+                    error("'Tail' must be 'two', 'left', or 'right', but was '%s'.", tailMode);
+            end
+            sig = sum(sig, 2);
+            if isrow(X)
+                sig = sig';
             end
         end
         
@@ -219,17 +386,18 @@ classdef MMath
             B = reshape(A, [prod(sz(dims)) sz(otherDims)]);
         end
         
-        function [ condDist, margDist ] = ConditionalDist(jointDist, givenWhich)
+        function [condDist, margDist] = ConditionalDist(jointDist, givenWhich)
             %Compute conditional probability distribution from joint distribution
             %
-            %   [ condDist, margDist ] = MMath.ConditionalDist(jointDist, givenWhich)
+            %   [condDist, margDist] = MMath.ConditionalDist(jointDist, givenWhich)
             %
-            % Inputs:
-            %   jointDist       multidimentional (>=2) array of joint probability
-            %   givenWhich      dimentions to condition on (currently has to be ndims(jointDist)-1 dimensions)
-            % Output:
-            %   condDist        array of conditional distribution
-            %   margDist        marginal distribution
+            % Inputs
+            %   jointDist       Multidimentional (>=2) array of joint probability
+            %   givenWhich      Dimentions to condition on (currently has to be ndims(jointDist)-1 dimensions)
+            % Outputs
+            %   condDist        Array of conditional distribution
+            %   margDist        Marginal distribution
+            % 
             
             % Collapsing other dimensions
             numDims = ndims(jointDist);
@@ -238,7 +406,7 @@ classdef MMath
                 margDist = jointDist;
             else
                 for i = 1 : length(margWhich)
-                    margDist = nansum(jointDist, margWhich(i));
+                    margDist = sum(jointDist, margWhich(i), 'omitnan');
                 end
             end
             
@@ -320,8 +488,9 @@ classdef MMath
             %   H           Entropy in bits
             
             probDist = probDist(:);
-            probDist = probDist / nansum(probDist);
-            H = -nansum(probDist .* log2(probDist));
+            probDist(probDist < 0) = 0;
+            probDist = probDist / sum(probDist, 'omitnan');
+            H = -sum(probDist .* log2(probDist), 'omitnan');
         end
         
         function expect = Expectation(distMat, val, idxDim)
@@ -789,6 +958,66 @@ classdef MMath
             I = nansum(I(:));
         end
         
+        function [N, c, k] = Normalize(A, normType, normParam)
+            % Normalize data in the columns of an array. The 'soft' version of each method scales 
+            % smaller signals less than larger signals.
+            % 
+            %   [N, c, k] = MMath.Normalize(A)
+            %   [N, c, k] = MMath.Normalize(A, normType)
+            %   [N, c, k] = MMath.Normalize(A, normType, normParam)
+            % 
+            % Inputs
+            %   A           An m-by-n numeric array where each column will be normalized.
+            %   normType    Standard normalization methods:
+            %                 'zscore' (default): zscore each timeseries.
+            %                 'max': normalize each timeseries by maximum or peak value.
+            %                 'minmax': normalize each timeseries by maximum or peak value.
+            %                 'none': no normalization.
+            %               Soft normalization (e.g. Russo et al. 2018):
+            %                 If appending a method name with 'soft', the normParam value will be 
+            %                 added to the normalization target. For example, 'maxsoft' normalizes 
+            %                 timeseries to max(A)+normParam rather than max(A). 'zscoresoft' 
+            %                 treats normParam as a value added to the amplitude of a sinusoidal 
+            %                 timeseries, and converts it to a value added to standard deviation.
+            %   normParam   See the soft normalization above.
+            % Outputs
+            %   N           An m-by-n array where each columns is normalized by N = (A-c)./k
+            %   c           A 1-by-n vector of offsets applied to A.
+            %   k           A 1-by-n vector of scaling factors applied after offset.
+            % 
+            
+            if nargin < 2
+                normType = 'zscore';
+            end
+            normType = lower(char(normType));
+            
+            k = 1;
+            c = 0;
+            switch normType
+                case 'max'
+                    k = max(A, [], 1, 'omitnan');
+                case 'maxsoft'
+                    k = max(A+normParam, [], 1, 'omitnan');
+                case 'minmax'
+                    c = min(A, [], 1, 'omitnan');
+                    k = max(A-c, [], 1, 'omitnan');
+                case 'minmaxsoft'
+                    c = min(A, [], 1, 'omitnan');
+                    k = max(A-c+normParam, [], 1, 'omitnan');
+                case 'zscore'
+                    c = mean(A, 1, 'omitnan');
+                    k = std(A-c, 0, 1, 'omitnan');
+                case 'zscoresoft'
+                    c = mean(A, 1, 'omitnan');
+                    k = std(A-c, 0, 1, 'omitnan') + normParam*0.707/2; % 0.707/2 converts max to equivalent std
+                case 'none'
+                    % do nothing
+                otherwise
+                    error("'%s' is not a valid normalization option.", normType);
+            end
+            N = (A-c)./k;
+        end
+        
         function [r2, r2adj] = RSquared(X, y, b, c)
             % Compute R-squared and adjusted R-squared
             %
@@ -822,14 +1051,84 @@ classdef MMath
             r2adj = 1 - (n-1)/(n-p) * SSE./TSS;
         end
         
-        function [a, I] = SortLike(a, b)
-            % Sort elements in 'a' as how these elements are ordered in 'b'
-            b = b(ismember(b, a));
-            I = zeros(size(a));
-            for i = 1 : numel(a)
-                I(i) = find(a==b(i));
+        function rsM = RepShiftMat(M, K, varargin)
+            % Shift element positions in an array along the first dimension
+            % 
+            %   rsM = RepShiftMat(M, K)
+            %   rsM = RepShiftMat(M, K, fillVal)
+            %   rsM = RepShiftMat(..., 'CellOutput', false)
+            % 
+            % Inputs
+            %   M               Matrix to replicate and shift.
+            %   K               A vector of the indices to shift by. The size of this vector, size(K), 
+            %                   determines how the replicated matrices will be arranged. 
+            %   fillVal         What value to fill when elements are shifted away.
+            %   'CellOutput'    Whether to output individual replicated and shifted matrices in cell 
+            %                   array. Default is false where cell array will be denested into a single 
+            %                   numeric array.
+            % Output
+            %   rsM             Replicated and shifted matrix.
+            % 
+            
+            p = inputParser();
+            p.addOptional('fillVal', NaN, @(x) isnumeric(x) && isscalar(x));
+            p.addParameter('CellOutput', false, @islogical);
+            p.parse(varargin{:});
+            fillVal = p.Results.fillVal;
+            isCell = p.Results.CellOutput;
+            
+            nRow = size(M, 1);
+            ind = (1:nRow)' + K(:)';
+            isOOB = ind < 1 | ind > nRow; % find out-of-bond indices
+            ind(isOOB) = 1; % make indices legal
+            
+            rsM = cell(size(K));
+            for k = 1 : numel(K)
+                rsM{k} = M(ind(:,k), :);
+                rsM{k}(isOOB(:,k), :) = fillVal;
             end
-            a = a(I);
+            
+            if ~isCell
+                rsM = cell2mat(rsM);
+            end
+        end
+        
+        function [aSorted, I] = SortLike(a, b, isVerbose)
+            % Sort elements in 'a' like how they are ordered in 'b'
+            %
+            %   [aSorted, I] = MMath.SortLike(a, b)
+            %   [aSorted, I] = MMath.SortLike(a, b, isVerbose)
+            %
+            % Inputs
+            %   a           A vector to sort on.
+            %   b           A vector with elements in target order to sort to.
+            %   isVerbose   Whether or not to show warnings. Default is true.
+            % Outputs
+            %   aSorted     The sorted vector a.
+            %   I           A vector of indices where aSorted = a(I).
+            % 
+            
+            if nargin < 3
+                isVerbose = true;
+            end
+            
+            nNotUni = numel(a) - numel(unique(a));
+            if nNotUni && isVerbose
+                warning("%i elements in 'a' are not unique. Only the first element of each unique value will be used.", nNotUni);
+            end
+
+            I = cell(size(b));
+            for i = 1 : numel(b)
+                I{i} = find(a==b(i), 1);
+            end
+            
+            isAbsent = cellfun(@isempty, I);
+            if any(isAbsent) && isVerbose
+                warning("%i members in 'b' cannot be found in 'a', and will be ignored.", sum(isAbsent));
+            end
+            
+            I = cat(1, I{~isAbsent});
+            aSorted = a(I);
         end
         
         function B = SqueezeDims(A, dims)
@@ -874,7 +1173,7 @@ classdef MMath
                 end
             end
             
-            sd = nanstd(A, 0, dim);
+            sd = std(A, 0, dim, 'omitnan');
             se = sd ./ sqrt(size(A,dim));
         end
         
@@ -903,7 +1202,7 @@ classdef MMath
             isUni = p.Results.UniformOutput;
             
             if isempty(cats)
-                cats = unique(vect);
+                cats = unique(vect, 'stable');
             end
             ranges = cell(numel(cats),1);
             for k = 1 : numel(cats)
@@ -929,37 +1228,48 @@ classdef MMath
             %               'span': compute VE by a set of orthonormal bases that span B.
             %               'unique': compute variance uniquely explained by each basis in B.
             % Output
-            %   VE          A vector of percent variance explained.
+            %   VE          A row vector of percent variance explained on each basis, or a
+            %               scalar if varType is 'span'.
+            % 
             
             if nargin < 3 || size(B,2) == 1
                 varType = 'each';
             end
-            assert(ismember(varType, {'each', 'span', 'unique'}));
+            varType = lower(char(varType));
             
             X = rmmissing(X);
             
-            % Normalize bases
-            L = sqrt(sum(B.^2));
-            L(L == 0) = eps;
-            B = B ./ L;
-            
-            if ~strcmp(varType, 'each')
-                % Find orthonormal bases
-                [Q, R] = qr(B);
-                if ismatrix(R)
-                    r = diag(R);
-                else
-                    r = R(1);
-                end
-                B = Q(:, 1:length(r));
-                if strcmp(varType, 'unique')
-                    % Scale bases
-                    B = B.*r';
-                end
+            switch varType
+                case 'each'
+                    % Normalize bases
+                    L = sqrt(sum(B.^2, 1));
+                    L(L == 0) = eps;
+                    B = B ./ L;
+                    
+                    % Compute variances
+                    varSub = var(X*B);
+                    
+                case 'span'
+                    % Compute total variance in the full span of B
+                    varSub = sum(var(X*orth(B), 0, 1));
+                    
+                case 'unique'
+                    % Compute total variance in the full span of B
+                    varB = sum(var(X*orth(B), 0, 1));
+                    
+                    % Compute total variance in spans of B minus single axes
+                    for i = size(B,2) : -1 : 1
+                        B_ = B(:,[1:i-1 i+1:end]);
+                        varB_(i) = sum(var(X*orth(B_), 0, 1));
+                    end
+                    
+                    % Subtract to get the unique variances
+                    varSub = varB - varB_;
+                    
+                otherwise
+                    error("'%s' is not a valid varType.", varType);
             end
             
-            % Compute variances
-            varSub = var(X*B);
             varTotal = trace(cov(X));
             VE = varSub/varTotal*100;
         end
@@ -991,6 +1301,7 @@ classdef MMath
             
             C = A'*B;
         end
+        
     end
 end
 

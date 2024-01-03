@@ -15,9 +15,15 @@ classdef MPlotter < handle
         plotTable;
         callbackTable;
     end
+    properties(Dependent)
+        epoch
+        time
+        timeLimits                  % two-element numeric vector of the time limits.
+    end
     
     properties(Access = private)
-        gui;
+        gui
+        hasGUI
     end
     
     methods
@@ -41,6 +47,61 @@ classdef MPlotter < handle
             this.plotTable = cell2table(exampleRows, 'VariableNames', columnNames);
         end
         
+        function AddPlot(this, figNum, subplotStr, varargin)
+            % Add a plot to the plotTable
+            % 
+            %   AddPlot(figNum, subplotStr)
+            %   AddPlot(figNum, subplotStr, functionHandle)
+            %   AddPlot(figNum, subplotStr, functionHandle, variableName)
+            %   AddPlot(figNum, subplotStr, functionHandle, variableName, updateOption)
+            % 
+            % Inputs
+            %   figNum              An integer handle indicating which figure to plot in.
+            %   subplotStr          A char string for subplot arrangement. e.g. the string '3,1,1' puts the plot 
+            %                       at the 1st block of a 3-by-1 grid - same convention as MATLAB subplot function. 
+            %   functionHandle      The handle of the plotting function. This function should expect the first 
+            %                       input argument to be the Axes object where the plot is made. Default is 
+            %                       @MPlotter.PlotTimeIndicator which plots a vertical bar at current time.
+            %   variableName        A char string of the variable name in the workspace. This variable will be 
+            %                       used as the second input argument to func. Default is '' and no additional 
+            %                       input will be sent to the plotting function.
+            %   updateOption        One of the following char strings specifying when to run the plotting function.
+            %                       'time': run whenever the time changes.
+            %                       'epoch': run whenever the epoch changes.
+            %                       'manual' (Default): run when the "Refresh all (r)" is pressed.
+            % 
+            
+            p = inputParser();
+            p.addOptional('func', @MPlotter.PlotTimeIndicator, @(x) isa(x, 'function_handle'));
+            p.addOptional('varName', '', @ischar);
+            p.addOptional('updateOpt', 'time', @ischar);
+            p.parse(varargin{:});
+            func = p.Results.func;
+            varName = p.Results.varName;
+            updateOpt = p.Results.updateOpt;
+            
+            tb = this.plotTable;
+            k = height(tb) + 1;
+            tb.figureNumber(k) = figNum;
+            tb.subplot{k} = subplotStr;
+            tb.functionHandle{k} = func;
+            tb.variableName{k} = varName;
+            tb.updateOption{k} = updateOpt;
+            this.plotTable = tb;
+        end
+        
+        function RemovePlot(this, ind)
+            % Remove one or more plots from the plotTable
+            % 
+            %   RemovePlot()
+            %   RemovePlot(ind)
+            % 
+            if ~exist('ind', 'var')
+                ind = 1:height(this.plotTable);
+            end
+            this.plotTable(ind,:) = [];
+        end
+        
         function ResetCallbackTable(this)
             % Initialize or reset callbackTable to default
             columnNames = {'functionHandle', 'variableName', 'callbackOption', 'updateOption'};
@@ -55,8 +116,7 @@ classdef MPlotter < handle
             
             % Close existing GUI
             try
-                close(this.gui.fig);
-                this.gui = [];
+                this.CloseRequest();
             catch
             end
             
@@ -218,33 +278,61 @@ classdef MPlotter < handle
             this.UpdateRoutine();
         end
         
-        function val = GetEpoch(this)
+        function RefreshAll(this)
+            % Open GUI if closed, and refresh all plots.
+            if ~this.hasGUI
+                this.GUI;
+            end
+            this.UpdateRoutine('manual');
+        end
+        
+        function val = get.hasGUI(this)
+            % Check if the GUI window is present
+            val = ~isempty(this.gui) && isvalid(this.gui.fig);
+        end
+        
+        function val = get.epoch(this)
             % Get the current epoch from UI
-            val = str2double(this.gui.epochEdit.String);
+            if this.hasGUI
+                val = str2double(this.gui.epochEdit.String);
+            else
+                val = [];
+            end
         end
         
-        function val = GetTime(this)
+        function val = get.time(this)
             % Get the current time from UI
-            val = str2double(this.gui.timeEdit.String);
+            if this.hasGUI
+                val = str2double(this.gui.timeEdit.String);
+            else
+                val = [];
+            end
         end
         
-        function val = GetTimeLimits(this)
+        function val = get.timeLimits(this)
             % Get the time limits from UI
-            val = str2double({this.gui.limitEdit1.String, this.gui.limitEdit2.String});
+            if this.hasGUI
+                val = str2double({this.gui.limitEdit1.String, this.gui.limitEdit2.String});
+            else
+                val = [];
+            end
         end
         
-        function SetEpoch(this, epoch)
+        function set.epoch(this, epoch)
             % Programatically change the current epoch
             this.UpdateRoutine('epoch', epoch);
         end
         
-        function SetTime(this, time)
+        function set.time(this, time)
             % Programatically change the current time
             this.UpdateRoutine('time', time);
         end
         
-        function SetTimeLimits(this, lims)
+        function set.timeLimits(this, lims)
             % Programatically change the time limits
+            if ~this.hasGUI
+                return
+            end
             this.gui.limitEdit1.String = num2str(lims(1));
             this.gui.limitEdit2.String = num2str(lims(2));
             this.UpdateRoutine('time');
@@ -254,20 +342,23 @@ classdef MPlotter < handle
             % Generate video from a figure window and optionally save to a video file.
             % The start and end times are determined by the time limit text boxes.
             % 
-            %   frames = MakeVideo(fig, dTime)
-            %   frames = MakeVideo(..., 'filePath', [], 'frameRate', [])
+            %   frames = mp.MakeVideo(fig, dTime)
+            %   frames = mp.MakeVideo(..., 'filePath', [], 'frameRate', [])
             % 
             % Inputs
-            %   fig             A figure handle.
+            %   mp              MPlotter object.
+            %   fig             One or a vector of figure handle(s).
             %   dTime           The amount of time increment in second for the animation. This is 
             %                   the time in data, not for video playback.
-            %   'FilePath'      The file path to save.
+            %   'FilePath'      The file path(s) to save at. The numnber of paths should match the number
+            %                   of handles in fig.
             %   'FrameRate'     The frame rate of the saved video file. This together with dTime controls
             %                   the speed of playback.
             % Output
             %   frames          A height-by-width-by-frames-by-RGB array of video frames.
             %                   A video file is save only when both 'filePath' and 'frameRate' are 
             %                   specified, but vidMat is always returned.
+            % 
             
             % Handle user inputs
             p = inputParser();
@@ -335,7 +426,7 @@ classdef MPlotter < handle
                 figNum = this.plotTable.figureNumber(i);
                 figObj = this.plotTable.figureObj{i};
                 sp = this.plotTable.subplot{i};
-                sp = eval(['{' sp '}']);
+                sp = eval(['{' char(sp) '}']);
                 axesObj = this.plotTable.axesObj{i};
                 funcHandle = this.plotTable.functionHandle{i};
                 varName = this.plotTable.variableName{i};
@@ -368,6 +459,10 @@ classdef MPlotter < handle
         end
         
         function UpdateRoutine(this, updateType, newVal)
+            
+            if ~this.hasGUI
+                return
+            end
             
             if nargin < 2
                 updateType = 'epoch';
@@ -421,14 +516,14 @@ classdef MPlotter < handle
                         % always update
                     case {'epoch', 'trial'}
                         if strcmp(updateType, {'time'})
-                            continue;
+                            continue
                         end
                     case 'manual'
                         if any(strcmp(updateType, {'time', 'epoch'}))
-                            continue;
+                            continue
                         end
                     otherwise
-                        continue;
+                        continue
                 end
                 
                 % Run function
@@ -566,7 +661,8 @@ classdef MPlotter < handle
                 catch
                 end
             end
-            delete(gcf);
+            delete(this.gui.fig);
+            this.gui = [];
         end
     end
     
@@ -582,12 +678,23 @@ classdef MPlotter < handle
                 ax.UserData.indicatorObj.XData = [t t]';
                 ax.UserData.indicatorObj.YData = ax.YLim';
             else
-                ax.UserData.indicatorObj = plot(ax, [t t]', ax.YLim', 'LineWidth', 2, 'Color', [0 0 0 .2]);
+                c = [ones(1,3)-ax.Color 0.2];
+                ax.UserData.indicatorObj = plot(ax, [t t]', ax.YLim', 'LineWidth', 2, 'Color', c);
                 hold(ax, 'on');
             end
             
             ax.XLim = tLims;
         end
+        
+        function s = SubplotArgs2Str(r, c, ii)
+            % Convert subplot arguments to a string for AddPlot input
+            iiStr = string(ii);
+            if numel(iiStr) > 1
+                iiStr = "[" + strjoin(iiStr, ' ') + "]";
+            end
+            s = strjoin([string([r c]) iiStr], ',');
+        end
+        
     end
     
     % Hide methods from handle class

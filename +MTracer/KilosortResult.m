@@ -271,7 +271,7 @@ classdef KilosortResult < MTracer.SortingResult
             pcSortInd = zeros(size(pcChInd));
             for i = 1 : size(pcChInd, 1)
                 ind = pcChInd(i,:);
-                [ind, pcSortInd(i,:)] = MMath.SortLike(ind, this.chanTb.sortInd);
+                [ind, pcSortInd(i,:)] = MMath.SortLike(ind, this.chanTb.sortInd, false);
                 m = ismember(this.chanTb.sortInd, ind);
                 pcChInd(i,:) = find(m);
             end
