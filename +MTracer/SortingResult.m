@@ -453,6 +453,7 @@ classdef SortingResult < handle
                 % Compute waveform centroid
                 chInd = arrayfun(@(x,y) x:y, cw(:,1), cw(:,2), 'Uni', false);
                 chInd = cat(1, chInd{:})';
+                chInd = MMath.Bound(chInd, [1 height(this.chanTb)]);
                 chXY = cat(3, this.chanTb.xcoords(chInd), this.chanTb.ycoords(chInd));
                 chXY = permute(chXY, [1 3 2]);
                 spkXY = MNeuro.ComputeWaveformCenter(w, chXY, 'power', 'centroid');
@@ -704,7 +705,9 @@ classdef SortingResult < handle
             for i = 1 : nW
                 % Find Channel
                 chInd = chWins(i,1) : chWins(i,2);
-                y = this.chanTb.ycoords(chInd);
+                isIn = chInd > 0 & chInd <= height(this.chanTb);
+                y = NaN(size(chInd));
+                y(isIn) = this.chanTb.ycoords(chInd(isIn));
                 
                 % Plot a wavefrom
                 MPlot.PlotTraceLadder(t, W(:,:,i)'*3/250, y', 'ColorArray', cc);
@@ -803,10 +806,13 @@ classdef SortingResult < handle
                 
                 % Scale waveform and add depth
                 for i = 1 : nW
+                    % Get channel indices
                     chInd = chWins(i,1) : chWins(i,2);
+                    isIn = chInd > 0 & chInd <= height(this.chanTb);
                     
                     % Scale waveform and add depth
-                    y = this.chanTb.ycoords(chInd);
+                    y = NaN(size(chInd));
+                    y(isIn) = this.chanTb.ycoords(chInd(isIn));
                     w(:,:,i) = w(:,:,i)*3/250 + y(:)';
                     
                     % Offset x

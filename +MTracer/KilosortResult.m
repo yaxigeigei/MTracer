@@ -92,20 +92,27 @@ classdef KilosortResult < MTracer.SortingResult
             
             tTb = table;
             for i = size(temp,3) : -1 : 1
-                % Add a row
+                % Take a template
                 tp = temp(:,:,i);
-%                 ind = find(any(tp, 2));
-                ind = pcChanInd(i,:)';
+                
+                % Find channel indices and the index of the template center
+                ind = double(pcChanInd(i,:)');
                 if isempty(ind)
                     warning('All the values in template #%i (zero-based) are zero. This template has %i spikes.', ...
                         i-1, sum(sTb.tempId==i-1));
+                    cIdx = round(mean(ind));
+                else
+                    [~, k] = MNeuro.ComputeWaveformCenter(tp(ind,:), [], 'power', 'peak');
+                    cIdx = ind(k);
                 end
+                
+                % Add a row
                 tTb.tempId(i) = i-1;
                 tTb.temp{i} = tp;
                 tTb.chanInd{i} = ind;
                 tTb.chanX{i} = this.chanTb.xcoords(ind);
                 tTb.chanY{i} = this.chanTb.ycoords(ind);
-                tTb.centIdx(i) = round(mean(ind));
+                tTb.centIdx(i) = cIdx;
                 
                 % Sort channels of pcWeights
                 m = sTb.tempId == i-1;

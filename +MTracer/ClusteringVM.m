@@ -4,7 +4,7 @@ classdef ClusteringVM < handle
     properties(Constant)
         appTbColNames = {'clusId', 'group', 'depth', 'numSpikes', 'RPV', 'contam', 'SNR'}
         noiseColor = [0 0 0] + .5
-        maxClusOp = 5
+        maxClusOp = 8
 %         featList = {'Amplitude', 'X-Position', 'PC1'};
         featList = {'Amplitude', 'X-Position'};
     end
@@ -769,7 +769,7 @@ classdef ClusteringVM < handle
                 'BusyAction', 'cancel');
             
             hold(ax, 'off');
-            this.sr.PlotClusterWaveform(cid, 30, spkMask, 'NumChannels', 32, 'Color', this.GetClusterColor(cid), 'Axes', ax);
+            this.sr.PlotClusterWaveform(cid, 30, spkMask, 'NumChannels', 16, 'Color', this.GetClusterColor(cid), 'Axes', ax);
 %             this.sr.PlotClusterTemplate(cid, 'Axes', ax);
             ax.Title.String = ['Cluster ' num2str(cid(:)')];
             ax.LooseInset([2 4]) = [0 0];
