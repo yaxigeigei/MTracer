@@ -135,7 +135,7 @@ classdef KilosortResult < MTracer.SortingResult
                 if any(m)
                     cTb.group{m} = gTb.group{i};
                 else
-                    warning('Skip cluster #%i (zero-based) for it is not associated with any spike.', gTb.cluster_id(i));
+                    % fprintf('Skip cluster #%i (zero-based) for it is not associated with any spike.\n', gTb.cluster_id(i));
                 end
             end
             
