@@ -237,8 +237,9 @@ classdef ImecDataset < handle
                 imec.lfRange = [metaLF.imAiRangeMin metaLF.imAiRangeMax];
             end
             
-            % copy snsShankMap in case needed for building channel map
-            imec.snsShankMap = meta.snsShankMap;
+            % Comment out by Many Xu for compatibility with new SpikeGLX metadata
+%             % copy snsShankMap in case needed for building channel map
+%             imec.snsShankMap = meta.snsShankMap;
 
             % look at AP meta fields that might have been set by us
             if isfield(meta, 'badChannels') && ~isempty(meta.badChannels)
