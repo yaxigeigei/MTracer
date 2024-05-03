@@ -47,17 +47,52 @@ classdef KilosortResult < MTracer.SortingResult
             this.LoadChannelMap(chanMapFile);
             
             
-            % Load rez.mat and save a subset of info
-            this.LoadRez(fullfile(ksFolder, 'rez.mat'));
+            % Map binary file
+            mdat = MKilosort2.MapDatFile(ksFolder);
+            
+            % Load sampling info
+            rezFile = fullfile(ksFolder, 'rez.mat');
+            opsFile = fullfile(ksFolder, 'ops.mat');
+            paramsFile = fullfile(ksFolder, 'params.py');
+            if exist(rezFile, 'file')
+                this.LoadRez(rezFile);
+                
+            elseif exist(opsFile, 'file')
+                load(opsFile, 'ops');
+                ops.tstart = round(ops.trange(1) * ops.fs);
+                if isinf(ops.trange(2))
+                    ops.tend = ops.tstart + size(mdat.Data.V, 2);
+                else
+                    ops.tend = round(ops.trange(2) * ops.fs);
+                end
+                this.sampleOffset = ops.tstart;
+                this.samplingRate = ops.fs;
+                this.rezLite.ops = ops;
+                
+%             elseif exist(paramsFile, 'file')
+%                 ops = MKilosort2.ReadParamsPy(paramsFile);
+%                 ops.fs = ops.sample_rate;
+%                 ops.tstart = ops.offset;
+%                 ops.tend = nSample;
+%                 ops.trange = [ops.tstart ops.tend];
+%                 this.sampleOffset = ops.tstart;
+%                 this.samplingRate = ops.fs;
+%                 this.rezLite.ops = ops;
+                
+            else
+                error("Cannot find files with necessary metadata.");
+            end
             
             
-            % Make spike table
+            % Read spike times
             origSpkTimeIndFile = fullfile(ksFolder, 'spike_times_original.npy');
             if exist(origSpkTimeIndFile, 'file')
                 tInd = readNPY(origSpkTimeIndFile); % sample indices of all spikes
             else
                 tInd = readNPY(fullfile(ksFolder, 'spike_times.npy')); % sample indices of all spikes
             end
+            
+            % Make spike table
             sTb = table;
             sTb.spkId = (1:numel(tInd))' - 1; % assign spike IDs (zero-based)
             sTb.timeInd = tInd;
@@ -142,7 +177,7 @@ classdef KilosortResult < MTracer.SortingResult
             
             % Save variables
             this.ksFolder = ksFolder;
-            this.mdat = MKilosort2.MapDatFile(ksFolder);
+            this.mdat = mdat;
             this.spkTb = sTb;
             this.tempTb = tTb;
             this.clusTb = cTb;
@@ -232,7 +267,7 @@ classdef KilosortResult < MTracer.SortingResult
             fprintf(contamFile, 'cluster_id%sContamPct', char(9));
             fprintf(contamFile, char([13 10]));
             for j = 1 : height(cTb)
-                fprintf(contamFile, '%d%s%.1f', cTb.clusId, char(9), cTb.contam(j));
+                fprintf(contamFile, '%d%s%.1f', cTb.clusId(j), char(9), cTb.contam(j));
                 fprintf(contamFile, char([13 10]));
             end
             fclose(contamFile);
@@ -241,7 +276,7 @@ classdef KilosortResult < MTracer.SortingResult
 %             fprintf(fileIDA, 'cluster_id%sAmplitude', char(9));
 %             fprintf(fileIDA, char([13 10]));
 %             for j = 1 : height(cTb)
-%                 fprintf(fileIDA, '%d%s%.1f', cTb.clusId, char(9), cTb.amplitude(j));
+%                 fprintf(fileIDA, '%d%s%.1f', cTb.clusId(j), char(9), cTb.amplitude(j));
 %                 fprintf(fileIDA, char([13 10]));
 %             end
 %             fclose(fileIDA);
