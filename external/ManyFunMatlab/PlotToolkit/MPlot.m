@@ -737,12 +737,14 @@ classdef MPlot
             
             p = inputParser();
             p.addOptional('Y', 1:size(spk,2), @(x) isnumeric(x));
+            p.addParameter('HeightScale', 0.8, @(x) isnumeric(x) && isscalar(x));
             p.addParameter('Color', [], @(x) true);
             p.addParameter('MarkUnits', [], @isnumeric);
             p.addParameter('MarkTrials', [], @isnumeric);
             p.addParameter('Parent', [], @(x) isa(x, 'matlab.graphics.axis.Axes'));
             p.parse(varargin{:});
             Y = p.Results.Y;
+            height_scale = p.Results.HeightScale;
             unit_c = p.Results.Color;
             indMU = p.Results.MarkUnits;
             indMT = p.Results.MarkTrials;
@@ -775,20 +777,21 @@ classdef MPlot
             for i = 1 : n_units
                 u_spk = spk{i};
                 n_trials = numel(u_spk);
-                y = Y(i) - 0.5 + 1/(n_trials+2);
+                trial_height = 1/n_trials * height_scale;
+                y = Y(i) - trial_height*n_trials/2 + trial_height/2;
                 
                 for j = 1 : n_trials
-                    y = y + 1/(n_trials+2);
-                    
                     spk_t = u_spk{j};
                     spk_y = repelem(y, length(spk_t));
-                    spk_h = 1/(n_trials+2) * .8;
+                    spk_h = trial_height * .8;
                     
                     if ~ismember(j, indMT)
                         MPlot.PlotPointAsLine(spk_t, spk_y, spk_h, 'Color', unit_c(i,:), 'LineWidth', .5, 'Parent', ax);
                     else
                         MPlot.PlotPointAsLine(spk_t, spk_y, spk_h, 'Color', [.8 0 0 1], 'LineWidth', .5, 'Parent', ax);
                     end
+                    
+                    y = y + trial_height;
                 end
             end
             
@@ -798,26 +801,26 @@ classdef MPlot
             ax.XGrid = 'on';
         end
         
-        function PlotHistStack(t, hh, ee, varargin)
+        function PlotHistStack(tt, hh, ee, varargin)
             % Plot a stack of histograms in one axes
             % 
-            %   MPlot.PlotHistStack(t, hh, ee)
+            %   MPlot.PlotHistStack(tt, hh, ee)
             %   MPlot.PlotHistStack(..., 'Scaling', 1)
             %   MPlot.PlotHistStack(..., 'Style', 'trace')
             %   MPlot.PlotHistStack(..., 'Color', [])
-            %   MPlot.PlotHistStack(..., 'MarkUnits', [])
             %   MPlot.PlotHistStack(..., 'Parent', [])
             % 
             % Inputs
-            %   t               A trials-by-units table or a cell array of spike time vectors.
-            %   hh              A trials-by-units table or a cell array of spike time vectors.
-            %   ee              A trials-by-units table or a cell array of spike time vectors.
-            %   'Scaling'       
-            %   'Style'         
-            %   'Color'         A units-by-3 RGB or units-by-4 RGBA array. If empty [], units alternate 
+            %   tt              1) m-element vector of timestamps, shared by all histograms.
+            %                   2) m-by-n array of timestamps for the n different histograms.
+            %   hh              m-by-n array for the bin heights of the n histograms.
+            %   ee              m-by-n array for the error of the n histograms.
+            %   'Scaling'       A scaling factor to adjust the height of the histograms.
+            %   'Style'         'trace' or 'bar'.
+            %   'Color'         n-by-3 RGB or n-by-4 RGBA array. If empty [], units alternate 
             %                   colors between [0 0 0] and [.3 .3 .3].
-            %   'MarkUnits'     A vector of indices for units to be marked by dark red [.8 0 0 1].
             %   'Parent'        Axes object to plot in.
+            % 
             
             p = inputParser();
             p.addParameter('Color', [], @(x) true);
@@ -836,39 +839,47 @@ classdef MPlot
                 ax = gca;
             end
             
+            % Replicate timestamps for each histogram
+            if isvector(tt)
+                tt = tt(:);
+            end
+            if size(tt,2) == 1
+                tt = repmat(tt, [1 size(hh,2)]);
+            end
+            
             % Scale heights
-            hh = hh * frac;
-            ee = ee * frac;
+            hh = hh .* frac;
+            ee = ee .* frac;
             
             % Determine colors
             n_units = size(hh, 2);
             if isempty(unit_c)
                 unit_c = repmat([0 0 0; .3 .3 .3], [ceil(n_units/2) 1]);
             end
+            if size(unit_c, 1) == 1
+                unit_c = repmat(unit_c, [n_units 1]);
+            end
             if ~isempty(indMU)
                 unit_c(indMU,:) = [.8 0 0]; % hightlight selected histograms in red
             end
             
-            % Prepare bins for bar plots
-            binSize = t(2) - t(1);
-            binEdges = t - binSize/2;
-            binEdges(end+1) = binEdges(end) + binSize;
-            
             % Plotting
             m = 0;
-            y = 0.5;
+            y = frac/2; %0.5;
             hold(ax, 'on');
             
             for i = 1 : n_units
+                t = tt(:,i);
                 m = m + 1;
                 switch style
                     case 'bar'
+                        binEdges = MMath.BinCenters2Edges(t);
                         px = repelem(binEdges, 2);
                         py = [0 repelem(hh(:,i)',2) 0];
                         patch(ax, px, -py+y+1, unit_c(m,:), 'FaceAlpha', .1, 'EdgeColor', 'none');
                     case 'trace'
-                        plot(ax, t, -hh(:,i)+y+1, 'Color', [unit_c(m,:) .5], 'LineWidth', 1);
                         MPlot.ErrorShade(t, -hh(:,i)+y+1, ee(:,i), 'Color', unit_c(m,:), 'Alpha', 0.1, 'Parent', ax);
+                        plot(ax, t, -hh(:,i)+y+1, 'Color', [unit_c(m,:) .5], 'LineWidth', 1);
                     otherwise
                         error('%s is not a supported style', style);
                 end
@@ -880,6 +891,74 @@ classdef MPlot
             ax.YDir = 'reverse';
             ax.XGrid = 'on';
 %             ax.XMinorGrid = 'on';
+        end
+        
+        function PlotHeatmapStack(T, MM, varargin)
+            % Plot a stack of heatmaps
+            % 
+            %   MPlot.PlotHeatmapStack(T, MM)
+            %   MPlot.PlotHeatmapStack(T, MM, ..., 'Scaling', 1)
+            %   MPlot.PlotHeatmapStack(T, MM, ..., 'Parent', [])
+            % 
+            % Inputs
+            %   T               s
+            %   'Scaling'       s
+            %   'Parent'        Axes object to plot in.
+            % 
+            
+            % Handles inputs
+            if isnumeric(MM)
+                MM = mat2cell(MM, size(MM,1), size(MM,2), ones(size(MM,3),1));
+            end
+            
+            n_maps = numel(MM);
+            
+            if ~isempty(T) && isnumeric(T)
+                if isvector(T)
+                    T = {T(:)};
+                else
+                    T = mat2cell(T, size(T,1), ones(size(T,2),1));
+                end
+            end
+            if isscalar(T)
+                T = repelem(T, n_maps);
+            end
+            
+            p = inputParser();
+            p.addParameter('Scaling', 1, @(x) isnumeric(x) && isscalar(x));
+            p.addParameter('Parent', [], @(x) isa(x, 'matlab.graphics.axis.Axes'));
+            p.parse(varargin{:});
+            scaling = p.Results.Scaling;
+            ax = p.Results.Parent;
+            
+            % Plot heatmaps
+            hold(ax, 'on');
+            for i = 1 : n_maps
+                M = MM{i};
+                [n_h, n_w] = size(M);
+                
+                if isempty(T)
+                    t = (1:n_w)';
+                else
+                    t = T{i};
+                end
+                
+                yBin = (0:n_h-1) / (n_h-1) - 0.5;
+                yBin = yBin*scaling + i;
+                
+                imagesc(ax, t, yBin, flip(M,1));
+            end
+%             ax.CLim = [0 2];
+%             ax.Colormap = brewermap([], 'Greys');
+            ax.YLim = [.5, n_maps+.5];
+            ax.YTick = 1 : n_maps;
+            ax.YDir = 'reverse';
+%             ax.XGrid = 'on';
+            
+%             ax.XLim = [min(tWin(:,1)) max(tWin(:,2))];
+%             ax.XLabel.String = 'Time (s)';
+            ax.FontSize = 8;
+            MPlot.Axes(ax);
         end
         
         function varargout = PlotTraceLadder(varargin)
@@ -1284,6 +1363,65 @@ classdef MPlot
                 varargout{1} = h;
             end
         end
+        
+        function h = ViolinScatter(pos0, val, varargin)
+            % Plot data points arranged in the shape of a violin plot
+            % 
+            %   h = MPlot.ViolinScatter(pos0, val)
+            %   h = MPlot.ViolinScatter(pos0, val, nbins)
+            %   h = MPlot.ViolinScatter(pos0, val, edges)
+            %   h = MPlot.ViolinScatter(pos0, val, ..., 'Span', 0.8)
+            %   h = MPlot.ViolinScatter(pos0, val, ..., LineArgs)
+            % 
+            % Inputs
+            %   pos0            Center position of the plot.
+            %   val             Values of the data points.
+            %   nbins, edges    histcounts parameters that control the binning. For example, less bins create 
+            %                   horizontally more spreadout and vertically more interspaced plot.
+            %   'Span'          The maximum horizontal span.
+            %   LineArgs        Any name-value arguments accepted by the MATLAB built-in plot or line function.
+            % Output
+            %   h               Handle of the plot object.
+            % 
+            
+            % Parse user inputs
+            p = inputParser;
+            p.KeepUnmatched = true;
+            p.addOptional('histParam', [], @(x) isnumeric(x));
+            p.addParameter('Span', 0.8, @(x) isnumeric(x));
+            p.parse(varargin{:});
+            histParam = p.Results.histParam;
+            sp = p.Results.Span;
+            
+            % Compute histogram
+            if isempty(histParam)
+                [N, ~, bins] = histcounts(val, 'Normalization', 'count');
+            else
+                [N, ~, bins] = histcounts(val, histParam, 'Normalization', 'count');
+            end
+            
+            % Position data points
+            ud = 1/max(N)*sp;
+            pos = NaN(size(val));
+            for i = 1 : numel(N)
+                isIn = bins == i;
+                binVal = val(isIn);
+                [binVal, I] = sort(binVal);
+                
+                dPos = (1:ceil(numel(binVal)/2)) * ud;
+                dPos = [0, repelem(dPos,2)];
+                dPos(1:2:end) = -dPos(1:2:end);
+                dPos = dPos(1:numel(binVal));
+                
+                dPos(I) = dPos;
+                pos(isIn) = pos0 + dPos;
+            end
+            
+            % Plot scatter
+            h = plot(pos, val, '.', p.Unmatched);
+        end
+        
+        
     end
     
 end

@@ -204,20 +204,24 @@ classdef MNeuro
                 r = r(:);
             end
             
-            switch lower(methodOpt)
-                case 'bin'
-                    % Bin spike times
-                    assert(all(diff(r) > 0), 'Spike times in r must be monotonically increasing');
-                    if numel(varargin) == 1
-                        tEdges = varargin{1};
-                    else
-                        tWin = varargin{1};
-                        binSize = varargin{2};
-                        tEdges = tWin(1) : binSize : tWin(2);
-                    end
-                    r = histcounts(r, tEdges, 'Normalization', 'countdensity');
-                    varargout{1} = tEdges;
-                    
+            methodOpt = lower(methodOpt);
+            
+            if methodOpt == "bin"
+                % Bin spike times
+                assert(all(diff(r) > 0), 'Spike times in r must be monotonically increasing');
+                if numel(varargin) == 1
+                    tEdges = varargin{1};
+                else
+                    tWin = varargin{1};
+                    binSize = varargin{2};
+                    tEdges = tWin(1) : binSize : tWin(2);
+                end
+                r = histcounts(r, tEdges, 'Normalization', 'countdensity');
+                varargout{1} = tEdges;
+                return
+            end
+            
+            switch methodOpt
                 case 'gaussian'
                     % Get parameters
                     sigma = varargin{1} * fs;
@@ -232,12 +236,6 @@ classdef MNeuro
                     a = (kerSize-1) / (2*sigma);
                     ker = gausswin(kerSize, a);
                     ker = ker / sum(ker);
-                    
-                    % Filtering
-                    for i = 1 : size(r,2)
-                        r(:,i) = conv(r(:,i), ker, 'same');
-                    end
-                    varargout{1} = ker;
                     
                 case 'exponential'
                     % Get parameters
@@ -256,15 +254,18 @@ classdef MNeuro
                     ker(kerSize:end) = y;
                     ker = ker / sum(ker);
                     
-                    % Filtering
-                    for i = 1 : size(r,2)
-                        r(:,i) = conv(r(:,i), ker, 'same');
-                    end
-                    varargout{1} = ker;
+                case 'custom'
+                    ker = varargin{1};
                     
                 otherwise
                     error('%s (case-insensitive) is not a valid method', methodOpt);
             end
+            
+            % Apply filtering
+            for i = 1 : size(r,2)
+                r(:,i) = conv(r(:,i), ker, 'same');
+            end
+            varargout{1} = ker;
         end
         
         function t = JointTuning(varargin)
@@ -670,6 +671,7 @@ classdef MNeuro
             % Compute contamination rate
             c = (1 - sqrt(1 - x)) / 2;
         end
+        
     end
 end
 

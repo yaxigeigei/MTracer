@@ -885,7 +885,7 @@ classdef MSessionExplorer < handle
             
             % Parse inputs
             p = inputParser();
-            p.addRequired('tbIn', @(x) ischar(x) || istable(x));
+            p.addRequired('tbIn', @(x) ischar(x) || isstring(x) || istable(x));
             p.addRequired('tEdges', @(x) iscell(x) || isnumeric(x));
             p.addOptional('rowInd', [], @(x) isnumeric(x) || islogical(x));
             p.addOptional('colInd', [], @(x) isnumeric(x) || islogical(x) || ischar(x) || iscellstr(x) || isstring(x));
@@ -943,8 +943,12 @@ classdef MSessionExplorer < handle
                     end
                     
                     % Interpolation
-                    F = griddedInterpolant(t, double(v), interpMethod, extrapMethod);
-                    v = F(tq);
+                    if numel(t) < 2
+                        v = NaN(size(tq));
+                    else
+                        F = griddedInterpolant(t, double(v), interpMethod, extrapMethod);
+                        v = F(tq);
+                    end
                     
                     tbOut.(j){i} = cast(v, dtype);
                 end

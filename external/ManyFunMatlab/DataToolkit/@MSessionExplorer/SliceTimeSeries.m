@@ -31,10 +31,10 @@ function tbOut = SliceTimeSeries(this, tbIn, tWin, varargin)
 
 % Handle user inputs
 p = inputParser();
-p.addRequired('tbIn', @(x) ischar(x) || istable(x));
+p.addRequired('tbIn', @(x) ischar(x) || isstring(x) || istable(x));
 p.addRequired('tWin', @(x) isnumeric(x) || iscell(x));
 p.addOptional('rowInd', [], @(x) isnumeric(x) || islogical(x));
-p.addOptional('colInd', [], @(x) isnumeric(x) || islogical(x) || iscellstr(x));
+p.addOptional('colInd', [], @(x) isnumeric(x) || islogical(x) || iscellstr(x) || isstring(x));
 p.addParameter('Fill', 'none', @(x) ismember(x, {'none', 'bleed', 'nan', 'nanbleed'}));
 p.addParameter('ReferenceTime', [], @(x) isnumeric(x) && isvector(x));
 
