@@ -442,13 +442,13 @@ classdef SortingResult < handle
                 k = cTb.clusId == cid(i);
                 [wMed, ~, wMad] = MMath.MedianStats(w, 3);
                 cTb.waveformMed{k} = wMed;
-                cTb.waveformSD{k} = wMad / 0.6745;
+                cTb.waveformSD{k} = wMad / 0.8;
                 
                 % Compute SNR
                 ic = ceil(size(w,1)/2); % find the middle channel
                 r = w(ic,:,:) - wMed(ic,:); % 1-by-nTm-by-nW residuals
                 [~, ~, rMad] = MMath.MedianStats(r(:));
-                cTb.SNR(k) = (max(wMed(ic,:)) - min(wMed(ic,:))) / (rMad/0.6745);
+                cTb.SNR(k) = (max(wMed(ic,:)) - min(wMed(ic,:))) / (rMad/0.8);
                 
                 % Compute waveform centroid
                 chInd = arrayfun(@(x,y) x:y, cw(:,1), cw(:,2), 'Uni', false);
