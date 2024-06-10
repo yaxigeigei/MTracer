@@ -106,6 +106,12 @@ classdef SortingResult < handle
             
             % Extract single-channel waveform
             [wf, ~, wfWin] = this.ExtractWaveform(spkInd, 'NumChannels', 1);
+            wf = double(wf);
+            wfWin = wfWin + this.sampleOffset;
+            
+            % Add ramps to avoid sudden changes
+            ker = gausswin(size(wf,2));
+            wf = wf.*ker';
             
             if ~isempty(wf)
                 % Find spike waveform timestamps for audio
@@ -122,10 +128,11 @@ classdef SortingResult < handle
                 wf = wf(ind);
                 
                 % Generate full audio by interpolation
-                wAud = interp1(tWf, double(wf), tAud, 'linear', 0);
-                wAud = wAud / max(abs(wAud)) * 0.1; % adjust amplitude, 0.1 is just an emperical factor
+                wAud = interp1(tWf, wf, tAud, 'linear', 0);
+                % wAud = highpass(wAud, 300, Fs);
+                wAud = wAud / max(abs(wAud)) * 1; % adjust amplitude, 0.1 is just an emperical factor
             else
-                warning('Cluster %i has no spikes in the specified time window. The audio will be silent.', cid);
+                fprintf('Cluster %i has no spike in the specified time window. The audio will be silent.\n', cid);
                 wAud = zeros(size(tAud));
             end
             
