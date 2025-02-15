@@ -531,7 +531,7 @@ classdef ClusteringVM < handle
                 end
                 
                 % Make or update plot
-                if isempty(properties(h)) || ~isvalid(h) % placeholder does not have properties
+                if isempty(h) || isempty(properties(h)) || ~isvalid(h) % placeholder does not have properties
                     % Get spike data
                     m = this.sr.spkTb.clusId == k;
                     t = this.sr.spkTb.timeSec(m);
