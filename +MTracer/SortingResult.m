@@ -67,12 +67,15 @@ classdef SortingResult < handle
             nChunk = ceil(nSpk / chunkSz);
             W = cell(nChunk,1);
             
+            % Get channel order
+            chanOrd = this.GetChannelOrder();
+            
             % Extract waveform by chunks to reduce memory usage
             for i = 1 : nChunk
                 a = (i-1)*chunkSz + 1;
                 b = min(i*chunkSz, nSpk);
                 W{i} = MKilosort2.ReadSnippets(this.mdat, spkTime(a:b), tmWin, spkTpCent(a:b), chWin, ...
-                    'ChannelOrder', this.chanTb.sortInd);
+                    'ChannelOrder', chanOrd);
                 disp([num2str(b) ' waveform extracted']);
             end
             W = cat(3, W{:});
@@ -82,11 +85,24 @@ classdef SortingResult < handle
             chWins = spkTpCent + chWin;
         end
         
+        function chanOrd = GetChannelOrder(this)
+            % 
+            nCh = this.mdat.Format{2}(1);
+            if nCh == height(this.chanTb)
+                % chanTb matches the binary file
+                chanOrd = this.chanTb.sortInd;
+            else
+                % chanTb contains  channels
+                chanOrd = MMath.SortLike(1:nCh, this.chanTb.chanId+1, false)';
+            end
+        end
+        
         function sn = ReadSnippets(this, spInd, spWin, varargin)
             % A wrapper of MKilosort2.ReadSnippets with preset parameters
             spInd = spInd - this.sampleOffset;
+            chanOrd = this.GetChannelOrder();
             sn = MKilosort2.ReadSnippets(this.mdat, spInd, spWin, varargin{:}, ...
-                    'ChannelOrder', this.chanTb.sortInd);
+                    'ChannelOrder', chanOrd);
         end
         
         function WriteSpikeAudio(this, fileName, cid, tWin)
@@ -466,6 +482,8 @@ classdef SortingResult < handle
                 spkXY = MNeuro.ComputeWaveformCenter(w, chXY, 'power', 'centroid');
                 sTb.centCoords(m,:) = spkXY;
                 cTb.depth(k) = round(median(sTb.centCoords(m,2), 'omitnan'));
+                
+                clear w cw;
             end
             
             % Update cluster table

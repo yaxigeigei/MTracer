@@ -124,7 +124,10 @@ classdef ClusteringVM < handle
             if ~this.hasClus
                 return
             end
-            this.sr.ExportData(this.vm.ksFolder);
+            bkFolder = this.sr.ExportData(this.vm.ksFolder);
+            if this.vm.hasApp
+                uialert(this.vm.app.UIFigure, ['Clustering result has been saved to Phy files.' newline 'Backups are located in: ' bkFolder], 'Success', 'Icon', 'Info');
+            end
         end
         
         % Cluster operations

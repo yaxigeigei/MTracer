@@ -12,7 +12,7 @@ classdef MTracerVM < MTracer.LayeredFigure
         
         % Data
         recId char = 'NP0_B0'
-        chanMapFile = 'NP1_NHP_HalfCol_kilosortChanMap.mat' % channel map .mat file
+        chanMapFile = ''            % channel map .mat file
         channelTable table          % channel info
         apBinFile = ''              % path of ap.bin file
         imec Neuropixel.ImecDataset % object used to access AP data
@@ -292,15 +292,27 @@ classdef MTracerVM < MTracer.LayeredFigure
             end
             
             % Try loading from cache
-            s = this.LoadCache(fullfile(ksDir, this.cacheFolderName, 'rez_lite_*.mat'));
+            [s, info] = this.LoadCache(fullfile(ksDir, this.cacheFolderName, 'rez_lite_*.mat'));
+            if strcmp(info, 'cancelled')
+                return
+            end
             
             try
                 if ~isempty(s)
                     rezLite = s.rezLite;
                 else
+                    % Check source file
+                    rezPath = fullfile(ksDir, 'rez.mat');
+                    if ~exist(rezPath, 'file')
+                        if this.hasApp
+                            uialert(this.app.UIFigure, 'Cannot find rez.mat file in the KS output folder', 'Hmmm...', 'Icon', 'warning')
+                        end
+                        return
+                    end
+                    
                     % Load rez.mat
                     disp('Loading rez.mat ...');
-                    s = load(fullfile(ksDir, 'rez.mat'), 'rez');
+                    s = load(rezPath, 'rez');
                     
                     % Cache a lightweight version of rez
                     rezLite.st0 = s.rez.st0;
@@ -333,6 +345,9 @@ classdef MTracerVM < MTracer.LayeredFigure
             catch e
                 assignin('base', 'e', e);
                 disp(e);
+                if this.hasApp
+                    uialert(this.app.UIFigure, 'Unable to load rez.mat', 'Hmmm...', 'Icon', 'warning')
+                end
             end
         end
         
@@ -349,7 +364,10 @@ classdef MTracerVM < MTracer.LayeredFigure
             this.ExtractRecId(ksDir);
             
             % Try loading from cache
-            s = this.LoadCache(fullfile(ksDir, this.cacheFolderName, 'sr_*.mat'));
+            [s, info] = this.LoadCache(fullfile(ksDir, this.cacheFolderName, 'sr_*.mat'));
+            if strcmp(info, 'cancelled')
+                return
+            end
             
             try
                 if ~isempty(s)
@@ -363,13 +381,13 @@ classdef MTracerVM < MTracer.LayeredFigure
                     sr.ImportData(ksDir, this.chanMapFile);
                     sr.ComputeAll();
                     
-                    % Cache the new kr object
+                    % Cache the new sr object
                     cacheFolder = fullfile(ksDir, this.cacheFolderName);
                     if ~exist(cacheFolder, 'dir')
                         mkdir(cacheFolder);
                     end
                     cacheFile = fullfile(cacheFolder, ['sr_' this.recId '_' datestr(now, 'yyyy-mm-dd_HH-MM-SS') '.mat']);
-                    save(cacheFile, 'sr');
+                    save(cacheFile, 'sr', '-v7.3');
                 end
                 
                 % Replace the old
@@ -381,32 +399,42 @@ classdef MTracerVM < MTracer.LayeredFigure
             catch e
                 assignin('base', 'e', e);
                 disp(e);
+                if this.hasApp
+                    uialert(this.app.UIFigure, 'Unable to find or load cluster data', 'Hmmm...', 'Icon', 'warning')
+                end
             end
         end
         
-        function [s, cachePath] = LoadCache(~, pattern)
+        function [s, info] = LoadCache(~, pattern)
             % Check caches and load the selected file
             
             % Default return values
-            cachePath = '';
             s = [];
+            info = '';
             
             % Check for caches
             cacheSearch = MBrowse.Dir2Table(pattern);
-            if ~isempty(cacheSearch)
-                [idx, isSelected] = listdlg( ...
-                    'ListString', cacheSearch.name, ...
-                    'InitialValue', height(cacheSearch), ...
-                    'Name', 'Available Cache', ...
-                    'SelectionMode', 'single', ...
-                    'OKString', 'Use', ...
-                    'CancelString', 'Recompute', ...
-                    'ListSize', [300 160]);
+            if isempty(cacheSearch)
+                return
+            end
+            
+            options = [string(cacheSearch.name); "From original files"];
+            [idx, isSelected] = listdlg( ...
+                'ListString', options, ...
+                'Name', 'Select a cache or recompute', ...
+                'SelectionMode', 'single', ...
+                'ListSize', [300 160]);
                 
-                if isSelected
-                    cachePath = fullfile(cacheSearch.folder{idx}, cacheSearch.name{idx});
-                    s = load(cachePath);
-                end
+            if ~isSelected
+                info = 'cancelled';
+                return
+            end
+            
+            if idx == numel(options)
+                info = 'recompute';
+            else
+                info = fullfile(cacheSearch.folder{idx}, cacheSearch.name{idx});
+                s = load(info);
             end
         end
         
@@ -445,7 +473,13 @@ classdef MTracerVM < MTracer.LayeredFigure
                 return;
             end
             
-            folderName = ['MTracer_' this.recId '_' datestr(now, 'yyyy-mm-dd_HH-MM-SS')];
+            % Prompt user to select a parent folder
+            parentFolder = uigetdir('', 'Select Parent Folder');
+            if parentFolder == 0
+                return; % User canceled the dialog
+            end
+            
+            folderName = fullfile(parentFolder, ['MTracer_' this.recId '_' datestr(now, 'yyyy-mm-dd_HH-MM-SS')]);
             mkdir(folderName);
             
             for i = 1 : numel(this.traces)
@@ -453,9 +487,9 @@ classdef MTracerVM < MTracer.LayeredFigure
                 save(fullfile(folderName, [this.traces(i).fileName '.mat']), 'dataTb');
             end
             
-            disp('Tracing results are saved to the current directory.');
+            disp('Tracing results are saved to the selected directory.');
             if this.hasApp
-                uialert(this.app.UIFigure, 'Tracing results are saved to the current directory.', 'Success', 'Icon', 'Info');
+                uialert(this.app.UIFigure, 'Tracing results are saved to the selected directory.', 'Success', 'Icon', 'Info');
             end
         end
         
