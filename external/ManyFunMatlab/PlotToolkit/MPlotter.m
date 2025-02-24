@@ -73,12 +73,14 @@ classdef MPlotter < handle
             
             p = inputParser();
             p.addOptional('func', @MPlotter.PlotTimeIndicator, @(x) isa(x, 'function_handle'));
-            p.addOptional('varName', '', @ischar);
+            p.addOptional('varName', '', @(x) ischar(x) || isstring(x));
             p.addOptional('updateOpt', 'time', @ischar);
             p.parse(varargin{:});
             func = p.Results.func;
-            varName = p.Results.varName;
+            varName = char(p.Results.varName);
             updateOpt = p.Results.updateOpt;
+            
+            warning('off', 'MATLAB:table:RowsAddedExistingVars');
             
             tb = this.plotTable;
             k = height(tb) + 1;
@@ -412,6 +414,7 @@ classdef MPlotter < handle
                 end
             end
         end
+        
     end
     
     methods(Access = private)

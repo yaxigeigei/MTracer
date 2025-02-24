@@ -1,5 +1,5 @@
 <deployment-project plugin="plugin.apptool" plugin-version="1.0">
-  <configuration build-checksum="1869886096" file="C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\mtracer\MTracer.prj" location="C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\mtracer" name="MTracer" target="target.mlapps" target-name="Package App">
+  <configuration build-checksum="433516971" file="C:\Users\many\Dropbox (Personal)\Documents\RnD\Chang Lab\project_np\code\mtracer\MTracer.prj" location="C:\Users\many\Dropbox (Personal)\Documents\RnD\Chang Lab\project_np\code\mtracer" name="MTracer" target="target.mlapps" target-name="Package App">
     <param.appname>MTracer</param.appname>
     <param.authnamewatermark>Many Xu</param.authnamewatermark>
     <param.email>duo.xu@ucsf.edu</param.email>
@@ -8,8 +8,8 @@
     <param.icons />
     <param.summary />
     <param.description />
-    <param.screenshot />
-    <param.version>0.17</param.version>
+    <param.screenshot>C:\Users\many\AppData\Local\Temp\tp099f5669_225e_4608_bf0d_96a16102bf32.png</param.screenshot>
+    <param.version>0.1.8</param.version>
     <param.products.name />
     <param.products.id />
     <param.products.version />
@@ -21,7 +21,6 @@
       <param.icons />
       <param.summary />
       <param.description />
-      <param.screenshot />
       <param.products.name />
       <param.products.id />
       <param.products.version />
@@ -37,6 +36,20 @@
       <file>${PROJECT_ROOT}\+MTracer\OperationManager.m</file>
       <file>${PROJECT_ROOT}\+MTracer\Polygon.m</file>
       <file>${PROJECT_ROOT}\+MTracer\SortingResult.m</file>
+      <file>${PROJECT_ROOT}\external\ManyFunMatlab\DataToolkit\@MSessionExplorer\MakeEventTimesTable.m</file>
+      <file>${PROJECT_ROOT}\external\ManyFunMatlab\DataToolkit\@MSessionExplorer\MakeTimeSeriesTable.m</file>
+      <file>${PROJECT_ROOT}\external\ManyFunMatlab\DataToolkit\@MSessionExplorer\MSessionExplorer.m</file>
+      <file>${PROJECT_ROOT}\external\ManyFunMatlab\DataToolkit\@MSessionExplorer\Plot.m</file>
+      <file>${PROJECT_ROOT}\external\ManyFunMatlab\DataToolkit\@MSessionExplorer\SliceEventTimes.m</file>
+      <file>${PROJECT_ROOT}\external\ManyFunMatlab\DataToolkit\@MSessionExplorer\SliceTimeSeries.m</file>
+      <file>${PROJECT_ROOT}\external\ManyFunMatlab\DataToolkit\@MSessionExplorer\UpdateOldObject.m</file>
+      <file>${PROJECT_ROOT}\external\ManyFunMatlab\DataToolkit\MBrowse.m</file>
+      <file>${PROJECT_ROOT}\external\ManyFunMatlab\DataToolkit\MKilosort2.m</file>
+      <file>${PROJECT_ROOT}\external\ManyFunMatlab\DataToolkit\MSpikeGLX.m</file>
+      <file>${PROJECT_ROOT}\external\ManyFunMatlab\DataToolkit\MUtil.m</file>
+      <file>${PROJECT_ROOT}\external\ManyFunMatlab\MathToolkit\MMath.m</file>
+      <file>${PROJECT_ROOT}\external\ManyFunMatlab\NeuralToolkit\MNeuro.m</file>
+      <file>${PROJECT_ROOT}\external\ManyFunMatlab\PlotToolkit\MPlot.m</file>
       <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\cmocean.m</file>
       <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\distinguishable_colors.m</file>
       <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\+Utils\getDefaultChannelMapFile.m</file>
@@ -64,26 +77,17 @@
       <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\TimeShiftSpec.m</file>
       <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\writeINI.m</file>
       <file>${PROJECT_ROOT}\external\neuropixel-utils\+Neuropixel\writeNPY.m</file>
+      <file>${PROJECT_ROOT}\external\npy-matlab\constructNPYheader.m</file>
+      <file>${PROJECT_ROOT}\external\npy-matlab\readNPY.m</file>
+      <file>${PROJECT_ROOT}\external\npy-matlab\readNPYheader.m</file>
+      <file>${PROJECT_ROOT}\external\npy-matlab\writeNPY.m</file>
       <file>${PROJECT_ROOT}\MTracerTrace.m</file>
       <file>${PROJECT_ROOT}\MTracerVM.m</file>
-      <file>C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\third_party_matlab\ManyFunMatlab\DataToolkit\@MSessionExplorer\MakeEventTimesTable.m</file>
-      <file>C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\third_party_matlab\ManyFunMatlab\DataToolkit\@MSessionExplorer\MakeTimeSeriesTable.m</file>
-      <file>C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\third_party_matlab\ManyFunMatlab\DataToolkit\@MSessionExplorer\MSessionExplorer.m</file>
-      <file>C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\third_party_matlab\ManyFunMatlab\DataToolkit\@MSessionExplorer\Plot.m</file>
-      <file>C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\third_party_matlab\ManyFunMatlab\DataToolkit\@MSessionExplorer\SliceEventTimes.m</file>
-      <file>C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\third_party_matlab\ManyFunMatlab\DataToolkit\@MSessionExplorer\SliceTimeSeries.m</file>
-      <file>C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\third_party_matlab\ManyFunMatlab\DataToolkit\@MSessionExplorer\UpdateOldObject.m</file>
-      <file>C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\third_party_matlab\ManyFunMatlab\DataToolkit\MBrowse.m</file>
-      <file>C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\third_party_matlab\ManyFunMatlab\DataToolkit\MKilosort2.m</file>
-      <file>C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\third_party_matlab\ManyFunMatlab\DataToolkit\MSpikeGLX.m</file>
-      <file>C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\third_party_matlab\ManyFunMatlab\MathToolkit\MMath.m</file>
-      <file>C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\third_party_matlab\ManyFunMatlab\NeuralToolkit\MNeuro.m</file>
-      <file>C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\third_party_matlab\ManyFunMatlab\PlotToolkit\MPlot.m</file>
     </fileset.depfun>
     <fileset.resources />
     <fileset.package />
     <build-deliverables>
-      <file location="${PROJECT_ROOT}" name="release" optional="false">C:\Users\many\oconnorlab Dropbox\Duo Xu\Documents\RnD\Chang Lab\project_np\code\mtracer\release</file>
+      <file location="${PROJECT_ROOT}" name="release" optional="false">C:\Users\many\Dropbox (Personal)\Documents\RnD\Chang Lab\project_np\code\mtracer\release</file>
     </build-deliverables>
     <workflow />
     <matlab>

@@ -412,10 +412,6 @@ classdef MKilosort2
             %   sn                  A channel-by-time-by-#snippets array of signal values.
             % 
             
-            tmInd = double(tmInd(:));
-            nSn = numel(tmInd);
-            [nCh, nTm] = size(mmap.Data.V);
-            
             p = inputParser();
             p.addOptional('chInd', [], @(x) isnumeric(x) && isvector(x));
             p.addOptional('chWin', [0 0], @(x) isnumeric(x) && numel(x)==2);
@@ -429,16 +425,23 @@ classdef MKilosort2
             vScale = p.Results.VoltScale;
             filtObj = p.Results.Filter;
             
+            tmInd = double(tmInd(:));
+            nSn = numel(tmInd);
+            nCh = mmap.Format{2}(1);
+            nTm = mmap.Format{2}(2);
+            
+            if isempty(cOrder)
+                cOrder = 1 : nCh;
+            else
+                nCh = numel(cOrder);
+            end
+            
             if isempty(chInd)
                 chInd = 1;
                 chWin = [0 nCh-1];
             end
             if isscalar(chInd)
                 chInd = ones(size(tmInd))*chInd;
-            end
-            
-            if isempty(cOrder)
-                cOrder = 1 : nCh;
             end
             
             % Read data
@@ -505,6 +508,110 @@ classdef MKilosort2
                 'PassbandRipple', 0.1, ...
                 'SampleRate', fs, ...
                 'DesignMethod', 'ellip');
+        end
+        
+        function varargout = PlotDriftMap(varargin)
+            % Plot dirft map with optional drift traces overlay
+            % 
+            %   ax = PlotDriftMap(rez)
+            %   ax = PlotDriftMap(rezPath)
+            %   ax = PlotDriftMap(ksDir)
+            %   ax = PlotDriftMap(..., isShowDriftTraces)
+            %   ax = PlotDriftMap(ax, ...)
+            % 
+            % Inputs
+            %   rez                     The rez struct.
+            %   rezPath                 The full path of "rez.mat" file.
+            %   ksDir                   The path of Kilosort output folder that contains the "rez.mat" file.
+            %   isShowDriftTraces       Whether or not to overlay the motion traces.
+            %   ax                      The axes to plot in.
+            % Output
+            %   ax                      The axes of plots.
+            % 
+            
+            % Parse inputs
+            if isa(varargin{1}, 'matlab.graphics.axis.Axes')
+                ax = varargin{1};
+                varargin = varargin(2:end);
+            else
+                ax = gca;
+            end
+            if nargout > 0
+                varargout{1} = ax;
+            end
+            
+            switch numel(varargin)
+                case 1
+                    rez = varargin{1};
+                    isShowMotion = true;
+                case 2
+                    [rez, isShowMotion] = varargin{:};
+                otherwise
+                    error("Incorrect number of input arguments.");
+            end
+            
+            % Load data
+            if ~isstruct(rez)
+                if isfolder(rez)
+                    rez = fullfile(rez, "rez.mat");
+                end
+                if isfile(rez)
+                    load(rez, "rez");
+                end
+            end
+            
+            % Plot spike map
+            ops = rez.ops;
+            tLims = [ops.tstart, ops.tstart+ops.sampsToRead] / ops.fs;
+            yLims = [min(rez.ycoords), max(rez.ycoords)];
+            
+            if isfield(rez, 'st0')
+                st = rez.st0;
+                t = (st(:,1) + ops.tstart) / ops.fs;
+                y = st(:,2);
+                a = st(:,3);
+            else
+                fprintf("Raw drift map data (rez.st0) is not available. Plot sorted spike map (rez.st3).\n");
+                st = rez.st3;
+                t = st(:,1) / ops.fs;
+                iTemp = st(:,2);
+                iChan = rez.iNeighPC(16, iTemp);
+                y = rez.ycoords(iChan);
+                a = round(st(:,3));
+            end
+            
+            ampRange = 8 : 100;
+            for k = 1 : numel(ampRange)
+                % for each amplitude bin, plot all the spikes of that size in the same shade of gray
+                ind = a == ampRange(k); % the amplitudes are rounded to integers
+                if ~any(ind)
+                    continue
+                end
+                plot(ax, t(ind), y(ind), '.', 'MarkerSize', 4, ...
+                    'Color', [1 1 1] * max(0, 1-ampRange(k)/40)); % the marker color here has been carefully tuned);
+                hold(ax, 'on');
+            end
+            ax.XLim = tLims;
+            ax.YLim = yLims;
+            ax.XLabel.String = sprintf("Time, sort range [%i, %i] (s)", round(tLims(1)), round(tLims(2)));
+            ax.YLabel.String = "Distance from tip (\mum)";
+            MPlot.Axes(ax);
+            
+            % Plot motion traces
+            if ~isShowMotion
+                return
+            end
+            if ~isfield(rez, 'dshift')
+                fprintf("No motion traces were plotted since drift correction was not enabled.\n");
+                return
+            end
+            D = rez.dshift;
+            tEdgesD = linspace(tLims(1), tLims(2), size(D,1)+1);
+            tCentersD = MMath.BinEdges2Centers(tEdgesD);
+            yEdgesD = linspace(yLims(1), yLims(2), size(D,2)+1);
+            yCentersD = MMath.BinEdges2Centers(yEdgesD);
+            
+            plot(tCentersD(:), yCentersD-D);
         end
         
     end

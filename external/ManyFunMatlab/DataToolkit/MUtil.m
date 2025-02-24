@@ -3,6 +3,49 @@ classdef MUtil
     %   Detailed explanation goes here
     
     methods(Static)
+        function x = ConvertNpyTypes(x, varargin)
+            % Convert numpy to matlab datatypes
+            % 
+            %   x = ConvertNpyTypes(x)
+            %   x = ConvertNpyTypes(x, ..., 'KeepUnsupported', true)
+            %   x = ConvertNpyTypes(x, ..., 'Recursive', true)
+            % 
+            % Inputs
+            %   'KeepUnsupported'       If set to false, unsupported datatypes are changed to [].
+            %   'Recursive'             If set to true, any fields of the struct or dict x will also be converted.
+            %                           The conversion will be performed recursively until variables are not struct 
+            %                           or dict.
+            % Output
+            %   x                       Converted variable
+            % 
+            
+            p = inputParser;
+            p.addParameter('KeepUnsupported', true, @islogical);
+            p.addParameter('Recursive', true, @islogical);
+            p.parse(varargin{:});
+            keepUnsupported = p.Results.KeepUnsupported;
+            isRecursive = p.Results.Recursive;
+            
+            if isa(x, 'py.dict') || isstruct(x)
+                x = struct(x);
+                if ~isRecursive
+                    return
+                end
+                n = fieldnames(x);
+                for i = 1 : numel(n)
+                    x.(n{i}) = MUtil.ConvertNpyTypes(x.(n{i}), 'Recursive', true);
+                end
+            elseif isa(x, 'py.int') || isa(x, 'py.numpy.float32') || isa(x, 'py.numpy.ndarray')
+                x = double(x);
+            elseif isa(x, 'py.str') || isa(x, 'py.list')
+                x = string(x);
+            elseif isa(x, 'py.NoneType')
+                x = [];
+            elseif startsWith(class(x), 'py,') && ~keepUnsupported
+                x = [];
+            end
+        end
+        
         function s = CombineStructs(varargin)
             % Combine multiple structs into one. Field names must be unique across structures. 
             %

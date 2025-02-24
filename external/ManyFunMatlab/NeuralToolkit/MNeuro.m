@@ -209,7 +209,7 @@ classdef MNeuro
             if methodOpt == "bin"
                 % Bin spike times
                 assert(all(diff(r) > 0), 'Spike times in r must be monotonically increasing');
-                if numel(varargin) == 1
+                if isscalar(varargin)
                     tEdges = varargin{1};
                 else
                     tWin = varargin{1};
@@ -225,7 +225,7 @@ classdef MNeuro
                 case 'gaussian'
                     % Get parameters
                     sigma = varargin{1} * fs;
-                    if numel(varargin) == 1
+                    if isscalar(varargin)
                         kerSize = 2 * 3 * sigma;
                     else
                         kerSize = varargin{2} * fs;
@@ -240,7 +240,7 @@ classdef MNeuro
                 case 'exponential'
                     % Get parameters
                     tau = varargin{1} * fs;
-                    if numel(varargin) == 1
+                    if isscalar(varargin)
                         kerSize = tau * 5;
                     else
                         kerSize = varargin{2} * fs;
@@ -428,9 +428,9 @@ classdef MNeuro
                 
                 % Compute mean and error of event rate
                 if exist('ciArgs', 'var')
-                    [m, ~, ~, e] = MMath.MeanStats(hh, ciArgs{:});
+                    [m, ~, ~, e] = MMath.MeanStats(hh, 1, ciArgs{:});
                 else
-                    [m, ~, e] = MMath.MeanStats(hh);
+                    [m, ~, e] = MMath.MeanStats(hh, 1);
                 end
                 mm(:,i) = m';
                 ee(:,i,:) = e';

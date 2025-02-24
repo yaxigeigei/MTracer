@@ -70,8 +70,12 @@ classdef MPlot
             
             % Handles user inputs
             if isempty(varargin) || ischar(varargin{1})
-                % Default color is gray
+                % Default face color is gray
                 varargin = [{[.9 .9 .9]}, varargin];
+            end
+            if ~any(cellfun(@(x) (ischar(x) || isstring(x)) && startsWith('EdgeColor', x), varargin))
+                % Default No edge
+                varargin = [varargin {'EdgeColor', 'none'}];
             end
             
             % Convert logical mask to boundaries
@@ -93,7 +97,7 @@ classdef MPlot
             % Plots blocks
             xx = xRange(:,[1 2 2 1])';
             yy = yRange(:,[1 1 2 2])';
-            p = patch(xx, yy, varargin{:}, 'EdgeColor', 'none');
+            p = patch(xx, yy, varargin{:});
             if nargout > 0
                 varargout{1} = p;
             end
@@ -493,9 +497,9 @@ classdef MPlot
             % Make axes comply with conventions of publication
             %
             %   MPlot.Paperize(h)
+            %   MPlot.Paperize(h, ColumnsWide)
+            %   MPlot.Paperize(h, ColumnsWide, ColumnsHigh)
             %   MPlot.Paperize(..., 'FontSize', 6)
-            %   MPlot.Paperize(..., 'ColumnsWide', [])
-            %   MPlot.Paperize(..., 'ColumnsHigh', [])
             %   MPlot.Paperize(..., 'AspectRatio', [])
             %   MPlot.Paperize(..., 'Zoom', 2)
             %   MPlot.Paperize(..., 'JournalStyle', 'Cell')
@@ -507,6 +511,8 @@ classdef MPlot
             
             p = inputParser();
             p.addOptional('h', gcf, @ishandle);
+            p.addOptional('colsWide', [], @isnumeric);
+            p.addOptional('colsHigh', [], @isnumeric);
             p.addParameter('FontSize', 6, @isscalar);
             p.addParameter('FontName', 'arial', @ischar);
             p.addParameter('Zoom', 2, @isscalar);
@@ -517,11 +523,17 @@ classdef MPlot
             
             p.parse(varargin{:});
             h = p.Results.h;
+            colsWide = p.Results.colsWide;
+            colsHigh = p.Results.colsHigh;
+            if isempty(colsWide)
+                colsWide = p.Results.ColumnsWide;
+            end
+            if isempty(colsHigh)
+                colsHigh = p.Results.ColumnsHigh;
+            end
             fontSize = p.Results.FontSize;
             fontName = p.Results.FontName;
             z = p.Results.Zoom;
-            colsWide = p.Results.ColumnsWide;
-            colsHigh = p.Results.ColumnsHigh;
             aRatio = p.Results.AspectRatio;
             journalStyle = lower(p.Results.JournalStyle);
             
@@ -537,12 +549,12 @@ classdef MPlot
                 % Calculate width by fold of cols
                 figWidth = widthSet(1) * colsWide;
                 
-                % Overwrite if at specific #cols
-                colOpts = [1 1.5 2];
-                optIdx = colsWide == colOpts;
-                if any(optIdx)
-                    figWidth = widthSet(colsWide == colOpts);
-                end
+                % % Overwrite if at specific #cols
+                % colOpts = [1 1.5 2];
+                % optIdx = colsWide == colOpts;
+                % if any(optIdx)
+                %     figWidth = widthSet(colsWide == colOpts);
+                % end
             end
             
             % 
@@ -691,7 +703,7 @@ classdef MPlot
                     hh(i) = plot(x, y, '.', varargin);
                 end
                 if i == numel(xx)
-                    hold on;
+                    hold(hh(i).Parent, 'on');
                 end
             end
             
@@ -718,10 +730,12 @@ classdef MPlot
             % 
             %   MPlot.PlotRasterStack(spk)
             %   MPlot.PlotRasterStack(spk, Y)
+            %   MPlot.PlotRasterStack(..., 'HeightScale', 0.8)
             %   MPlot.PlotRasterStack(..., 'Color', [])
+            %   MPlot.PlotRasterStack(..., 'LineWidth', .5)
+            %   MPlot.PlotRasterStack(..., 'Parent', [])
             %   MPlot.PlotRasterStack(..., 'MarkUnits', [])
             %   MPlot.PlotRasterStack(..., 'MarkTrials', [])
-            %   MPlot.PlotRasterStack(..., 'Parent', [])
             % 
             % Inputs
             %   spk             1) A trial-by-unit table or cell array of spike time vectors.
@@ -729,25 +743,29 @@ classdef MPlot
             %                      cell array of spike time vectors. This allows different units to 
             %                      have different number of trials.
             %   Y               A numeric vector for each raster's middle Y position.
+            %   'HeightScale'   The height of each raster set.
             %   'Color'         A unit-by-3 RGB or unit-by-4 RGBA array. If empty [], units alternate 
             %                   colors between [0 0 0 .7] and [.3 .3 .3 .7].
+            %   'Parent'        Axes object to plot in.
+            %   'LineWidth'     LineWidth of the spikes.
             %   'MarkUnits'     A vector of indices for units to be marked by dark red [.8 0 0 1].
             %   'MarkTrials'    A vector of indices for trials to be marked by dark red [.8 0 0 1].
-            %   'Parent'        Axes object to plot in.
             
             p = inputParser();
             p.addOptional('Y', 1:size(spk,2), @(x) isnumeric(x));
             p.addParameter('HeightScale', 0.8, @(x) isnumeric(x) && isscalar(x));
             p.addParameter('Color', [], @(x) true);
+            p.addParameter('LineWidth', .5, @isnumeric);
+            p.addParameter('Parent', [], @(x) isa(x, 'matlab.graphics.axis.Axes'));
             p.addParameter('MarkUnits', [], @isnumeric);
             p.addParameter('MarkTrials', [], @isnumeric);
-            p.addParameter('Parent', [], @(x) isa(x, 'matlab.graphics.axis.Axes'));
             p.parse(varargin{:});
             Y = p.Results.Y;
             height_scale = p.Results.HeightScale;
             unit_c = p.Results.Color;
             indMU = p.Results.MarkUnits;
             indMT = p.Results.MarkTrials;
+            lw = p.Results.LineWidth;
             ax = p.Results.Parent;
             
             % Standardize input to nested cell array
@@ -786,9 +804,9 @@ classdef MPlot
                     spk_h = trial_height * .8;
                     
                     if ~ismember(j, indMT)
-                        MPlot.PlotPointAsLine(spk_t, spk_y, spk_h, 'Color', unit_c(i,:), 'LineWidth', .5, 'Parent', ax);
+                        MPlot.PlotPointAsLine(spk_t, spk_y, spk_h, 'Color', unit_c(i,:), 'LineWidth', lw, 'Parent', ax);
                     else
-                        MPlot.PlotPointAsLine(spk_t, spk_y, spk_h, 'Color', [.8 0 0 1], 'LineWidth', .5, 'Parent', ax);
+                        MPlot.PlotPointAsLine(spk_t, spk_y, spk_h, 'Color', [.8 0 0 1], 'LineWidth', lw, 'Parent', ax);
                     end
                     
                     y = y + trial_height;
@@ -823,6 +841,7 @@ classdef MPlot
             % 
             
             p = inputParser();
+            p.KeepUnmatched = true;
             p.addParameter('Color', [], @(x) true);
             p.addParameter('Scaling', 1, @(x) isnumeric(x) && isscalar(x));
             p.addParameter('Style', 'trace', @(x) ismember(x, {'trace', 'bar'}));
@@ -830,6 +849,7 @@ classdef MPlot
             p.addParameter('Parent', [], @(x) isa(x, 'matlab.graphics.axis.Axes'));
             p.parse(varargin{:});
             unit_c = p.Results.Color;
+            alpha = 1;
             frac = p.Results.Scaling;
             style = p.Results.Style;
             indMU = p.Results.MarkUnits;
@@ -876,10 +896,10 @@ classdef MPlot
                         binEdges = MMath.BinCenters2Edges(t);
                         px = repelem(binEdges, 2);
                         py = [0 repelem(hh(:,i)',2) 0];
-                        patch(ax, px, -py+y+1, unit_c(m,:), 'FaceAlpha', .1, 'EdgeColor', 'none');
+                        patch(ax, px, -py+y+1, unit_c(m,:), 'FaceAlpha', .1, 'EdgeColor', 'none', p.Unmatched);
                     case 'trace'
                         MPlot.ErrorShade(t, -hh(:,i)+y+1, ee(:,i), 'Color', unit_c(m,:), 'Alpha', 0.1, 'Parent', ax);
-                        plot(ax, t, -hh(:,i)+y+1, 'Color', [unit_c(m,:) .5], 'LineWidth', 1);
+                        plot(ax, t, -hh(:,i)+y+1, 'Color', [unit_c(m,:) alpha], p.Unmatched);
                     otherwise
                         error('%s is not a supported style', style);
                 end
@@ -890,7 +910,6 @@ classdef MPlot
             ax.YTick = 1 : n_units;
             ax.YDir = 'reverse';
             ax.XGrid = 'on';
-%             ax.XMinorGrid = 'on';
         end
         
         function PlotHeatmapStack(T, MM, varargin)
@@ -1247,6 +1266,39 @@ classdef MPlot
             barLength = round(barLength, 1, 'significant');
         end
         
+        function lb = StaggerLabels(lb, offsets)
+            % Satgger labels with added spaces
+            %
+            %   lb = StaggerLabels(lb)
+            %   lb = StaggerLabels(lb, offsets)
+            % 
+            % Inputs
+            %   lb          Label strings.
+            %   offsets     A vector of character offsets.
+            % Output
+            %   lb          Staggered label strings.
+            % 
+            lb = cellstr(lb(:));
+            if nargin < 2
+                offsets = -[0 median(cellfun(@length, lb))];
+            end
+            if isscalar(offsets)
+                offsets = [0 offsets];
+            end
+            offsets = round(offsets);
+            offsets = repmat(offsets(:), ceil(numel(lb)/numel(offsets)), 1);
+            offsets = offsets(1:numel(lb));
+            sp = arrayfun(@(x) repelem(' ', x), abs(offsets), 'Uni', false);
+            for i = 1 : numel(lb)
+                if offsets(i) > 0
+                    lb{i} = [sp{i} lb{i}];
+                else
+                    lb{i} = [lb{i} sp{i}];
+                end
+            end
+            lb = string(lb);
+        end
+        
         function varargout = Violin(pos, bb, nn, varargin)
             % Plot histograms as violins
             % 
@@ -1372,6 +1424,7 @@ classdef MPlot
             %   h = MPlot.ViolinScatter(pos0, val, edges)
             %   h = MPlot.ViolinScatter(pos0, val, ..., 'Span', 0.8)
             %   h = MPlot.ViolinScatter(pos0, val, ..., LineArgs)
+            %   pos = MPlot.ViolinScatter(pos0, val, ..., 'IsPlot', false)
             % 
             % Inputs
             %   pos0            Center position of the plot.
@@ -1389,9 +1442,11 @@ classdef MPlot
             p.KeepUnmatched = true;
             p.addOptional('histParam', [], @(x) isnumeric(x));
             p.addParameter('Span', 0.8, @(x) isnumeric(x));
+            p.addParameter('IsPlot', true, @islogical);
             p.parse(varargin{:});
             histParam = p.Results.histParam;
             sp = p.Results.Span;
+            isPlot = p.Results.IsPlot;
             
             % Compute histogram
             if isempty(histParam)
@@ -1418,6 +1473,10 @@ classdef MPlot
             end
             
             % Plot scatter
+            if ~isPlot
+                h = pos;
+                return
+            end
             h = plot(pos, val, '.', p.Unmatched);
         end
         
@@ -1425,4 +1484,3 @@ classdef MPlot
     end
     
 end
-

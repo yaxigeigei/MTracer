@@ -397,7 +397,7 @@ classdef MSessionExplorer < handle
             p.addOptional('referenceTime', [], @isnumeric);
             p.parse(tbName, tb, varargin{:});
             tbName = char(tbName);
-            tbType = p.Results.tableType;
+            tbType = char(p.Results.tableType);
             refTimes = p.Results.referenceTime;
             
             % Check epoch number conflict
@@ -462,6 +462,7 @@ classdef MSessionExplorer < handle
             % Input
             %   tbNameN         A string indicating the name of a table to remove.
             
+            varargin = cellstr(varargin);
             notTb = setdiff(varargin, this.tableNames);
             if this.isVerbose
                 warning backtrace off
@@ -678,7 +679,7 @@ classdef MSessionExplorer < handle
             assert(~isempty(indAlignable), 'Requires at least one eventTimes or timeSeries table to operate on');
             
             % Get reference event times
-            if ischar(et)
+            if ischar(et) || isstring(et)
                 assert(nargin == 3, 'Requires refSourceTableName to indicate where ''%s'' is in', et);
                 this.IValidateTableName(sourceTbName, true);
                 et = this.tot{sourceTbName, 'tableData'}{1}.(et);
