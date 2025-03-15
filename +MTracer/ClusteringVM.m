@@ -433,7 +433,7 @@ classdef ClusteringVM < handle
             % Find the range of mean cluster depths
             m = ismember(this.sr.clusTb.clusId, cid);
             yClus = this.sr.clusTb.depth(m);
-            yWin = [min(yClus) max(yClus)] + [-1 1]*250;
+            yWin = [min(yClus) max(yClus)] + [-1 1]*400;
             
             % Set ROI
             this.vm.SetMapROI(this.vm.hAxes.XLim, yWin);
