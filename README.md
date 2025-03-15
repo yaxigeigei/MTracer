@@ -14,27 +14,40 @@ Publications using MTracer:
 
 There are two ways to install MTracer:
 
-### 1. Add to Path (Recommended)
+**1. Add to Path (Recommended)**
 
 1. Clone or download this repository
 2. Add the repository folder to your MATLAB path
     - In MATLAB, Home -> Set Path -> Add with Subfolders -> Select the repository folder
     - Or run `addpath(genpath('path_to_mtracer'))` in the MATLAB command window
-3. This way will also include the three external packages in the `external` folder:
+3. This will also include the three external dependencies in the `external` folder:
     - `ManyFunMatlab`
     - `neuropixel-utils`
     - `npy-matlab`
 
-### 2. App Installer
+**2. App Installer**
 
 1. Double-click the `\release\MTracer.mlappinstall` file to install it in MATLAB
 2. The app will appear in the MATLAB Apps tab
 3. Note that installing with the app installer will not give you access to the source code of the app
 
-## Compatibility
+**Compatibility**
 
 - Requires MATLAB 2021a or later
 - To read Kilosort 4 results, Python must be available to MATLAB
+
+## Run the App
+
+**For most users**
+
+Run "MTracer" from the MATLAB command window.  
+Tip: you can save this command to the Favorites tab for quick access.
+
+**As an object (for advanced users)**
+
+```matlab
+mtracer = MTracerVM;
+```
 
 ## Maps Window
 
@@ -53,11 +66,11 @@ The window supports three interaction modes:
 2. **Tracing Mode**: Add anchor points to the tissue motion tracking traces.
 3. **Cluster Cutting Mode**: Cut spike clusters by drawing polygons.
 
-Example 1: Drift Map Layer + Traces Layer
+**Example Video 1**: Drift Map Layer + Traces Layer (click to play on YouTube)
 
 [![Example 1: Drift Map Layer + Traces Layer](https://img.youtube.com/vi/kTB0YQXjERk/maxresdefault.jpg)](https://youtu.be/kTB0YQXjERk)
 
-Example 2: Clustering Layer
+**Example Video 2**: Clustering Layer (click to play on YouTube)
 
 [![Example 2: Clustering Layer](https://img.youtube.com/vi/ajViOUu2O68/maxresdefault.jpg)](https://youtu.be/ajViOUu2O68)
 
