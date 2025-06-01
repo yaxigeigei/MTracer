@@ -776,7 +776,7 @@ classdef ClusteringVM < handle
 %             this.sr.PlotClusterTemplate(cid, 'Axes', ax);
             ax.Title.String = ['Cluster ' num2str(cid(:)')];
             ax.LooseInset([2 4]) = [0 0];
-            f.Position(3) = diff(ax.XLim) * 30 + 15;
+            f.Position(3) = diff(ax.XLim) * 35 + 15;
         end
         
         function PlotCCG(this, cid)

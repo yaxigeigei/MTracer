@@ -295,5 +295,6 @@ classdef MotionInterpolant
                 end
             end
         end
+    
     end
 end

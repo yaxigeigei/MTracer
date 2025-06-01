@@ -227,13 +227,13 @@ In this tab, you can find documentation for all the shortcuts in the app.
 | Plotting | 1 | Toggle focus indicator |
 | | 2 | Toggle raw spikes |
 | | 3 | Toggle cluster spikes |
-| | 4 | Toggle AP signals |
-| | 5 | Toggle LFP markers |
+| | 4 | Toggle AP traces |
+| | 5 | Toggle LFP heatmap |
 | | 6 | Toggle anchor points |
 | | 7 | Toggle interpolated traces |
-| | = | Increase spike marker size |
-| | - | Decrease spike marker size |
-| | v | Plot AP signals around focus |
+| | . | Increase spike marker size |
+| | , | Decrease spike marker size |
+| | v | Plot AP traces around focus |
 | Tracing | t | Enter tracing mode |
 | | esc | Exit tracing mode |
 | | Left click | Add an anchor point |
