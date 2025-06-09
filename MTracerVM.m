@@ -315,7 +315,18 @@ classdef MTracerVM < MTracer.LayeredFigure
                     s = load(rezPath, 'rez');
                     
                     % Cache a lightweight version of rez
-                    rezLite.st0 = s.rez.st0;
+                    if isfield(s.rez, 'st0')
+                        rezLite.st0 = s.rez.st0;
+                    else
+                        fprintf("Raw drift map data (rez.st0) is not available. Construct one from sorted spikes (rez.st3).\n");
+                        st = s.rez.st3;
+                        t = st(:,1) - s.rez.ops.tstart;
+                        iTemp = st(:,2);
+                        iChan = s.rez.iNeighPC(16, iTemp);
+                        y = s.rez.ycoords(iChan);
+                        a = round(st(:,3));
+                        rezLite.st0 = [t, y, a];
+                    end
                     rezLite.ops = s.rez.ops;
                     cacheFolder = fullfile(ksDir, this.cacheFolderName);
                     if ~exist(cacheFolder, 'dir')

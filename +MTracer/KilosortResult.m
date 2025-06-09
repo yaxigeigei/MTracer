@@ -227,7 +227,7 @@ classdef KilosortResult < MTracer.SortingResult
             for i = 1 : numel(fields2copy)
                 fn = fields2copy{i};
                 if ~ismember(fn, fieldnames(rez))
-                    warning("Field '%s' is missing from rez", fn);
+                    fprintf("Field '%s' is missing from rez.mat\n", fn);
                     continue
                 end
                 this.rezLite.(fn) = rez.(fn);
