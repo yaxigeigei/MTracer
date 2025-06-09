@@ -1,0 +1,83 @@
+# MATLAB specific
+*.asv
+*.m~
+*.mex*
+*.mat
+*.fig
+slprj/
+sccprj/
+codegen/
+*.autosave
+*.slxc
+
+# MATLAB App Designer
+*.mlapp.backup
+*.mlappinstall
+*.mltbx
+
+# MATLAB Drive
+*.MATLABDriveTag
+
+# MATLAB Simulink
+*.slx.r*
+*.slx.original
+*.slxc
+*.mdl.r*
+*.mdlp
+*.sldd
+*.slxp
+*.slddc
+*_sfun_debug
+
+# MATLAB code generation folders
+codegen/
+slprj/
+sccprj/
+
+# MATLAB Project
+resources/project/
+resources/project/*
+*.prj
+
+# Windows default autosave extension
+*.asv
+
+# OSX / *nix default autosave extension
+*.m~
+
+# Compiled MEX binaries (all platforms)
+*.mex*
+
+# Packaged app and toolbox files
+*.mlappinstall
+*.mltbx
+
+# Generated helpsearch folders
+helpsearch*/
+
+# Simulink cache folders
+*.slxc
+
+# Simulink code generation folders
+slprj/
+sccprj/
+codegen/
+
+# Matlab code generation folders
+codegen/
+
+# Session info
+octave-workspace
+
+# Simulink autosave extension
+*.autosave
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride 
