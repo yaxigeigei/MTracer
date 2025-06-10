@@ -244,6 +244,7 @@ classdef MKilosort2
             % Load channel info from a channel map .mat file to a table
             % 
             %   [chanTb, chanTbKS] = MKilosort2.LoadChanMap2Table(chanMapFile)
+            %   [chanTb, chanTbKS] = MKilosort2.LoadChanMap2Table(SpikeGLXMetaFile)
             % 
             % Input:
             %   chanMapFile         Path of a channel map MAT file, e.g. NP1_NHP_HalfCol_kilosortChanMap.mat.
@@ -254,6 +255,7 @@ classdef MKilosort2
             %                       ycoords         Y coordinates of channels in microns.
             %                       connected       Binary vector indicating what channels are valid.
             %                                       Reference and bad channels are usually set to 0.
+            %   SpikeGLXMetaFile    Path of a SpikeGLX meta file, e.g. ap.meta or lf.meta.
             % Outputs:
             %   chanTb              A table that organizes varibales from chanMapFile in columns.
             %   chanTbKS            Similar to chanTb but only with connected channels. This table is consistent
@@ -261,9 +263,16 @@ classdef MKilosort2
             %                       the rows are sorted spatially in the order of increasing shank ID, decreasing 
             %                       y coordinate (distance to tip), and increasing x coordinate.
             % 
+            % See also: MSpikeGLX.MetaToChanMap
             
             % Load mat file
-            s = load(chanMapFile);
+            if endsWith(chanMapFile, '.mat')
+                s = load(chanMapFile);
+            elseif endsWith(chanMapFile, '.meta')
+                s = MSpikeGLX.MetaToChanMap(chanMapFile);
+            else
+                error('Incorrect file type: %s', chanMapFile);
+            end
             
             % Make a table of channel info
             chanTb = table;
