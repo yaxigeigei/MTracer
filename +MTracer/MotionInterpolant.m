@@ -52,6 +52,54 @@ classdef MotionInterpolant
             this.fwF = F;
         end
         
+        function Export(this, folderPath, depthCenters)
+            % Export motion data in spike interface output format
+            % 
+            %   obj.Export(folderPath, depthCenters)
+            % 
+            % Inputs
+            %   folderPath        Output directory path
+            %   depthCenters      Optional depth centers (default: 0:200:7660)
+            % 
+            % Output files:
+            %   temporal_bins_s_seg0.npy: time bin centers (length number of time bins)
+            %   spatial_bins_um.npy: spatial bin centers (length number of depth bins)  
+            %   displacement_seg0.npy: estimated displacement for time bin and depth bin (2d array)
+
+            if nargin < 2 || isempty(folderPath)
+                error('folderPath is required');
+            end
+            
+            if nargin < 3 || isempty(depthCenters)
+                depthCenters = (0 : 200 : 7660)';
+            end
+            
+            % Ensure output directory exists
+            if ~exist(folderPath, 'dir')
+                mkdir(folderPath);
+            end
+            
+            % Compute displacement field
+            [~, ~, dY] = this.ComputeDispField(this.t, depthCenters);
+            
+            % Export temporal bins (time bin centers in seconds)
+            temporalBinsFile = fullfile(folderPath, 'temporal_bins_s_seg0.npy');
+            writeNPY(this.t, temporalBinsFile);
+            
+            % Export spatial bins (depth bin centers in micrometers)
+            spatialBinsFile = fullfile(folderPath, 'spatial_bins_um.npy');
+            writeNPY(depthCenters, spatialBinsFile);
+            
+            % Export displacement data (2D array: time x depth)
+            displacementFile = fullfile(folderPath, 'displacement_seg0.npy');
+            writeNPY(dY, displacementFile);
+            
+            fprintf('Motion data exported to:\n');
+            fprintf('  %s\n', temporalBinsFile);
+            fprintf('  %s\n', spatialBinsFile);
+            fprintf('  %s\n', displacementFile);
+        end
+        
         function [T, Y, dY] = ComputeDispField(this, t, y0)
             
             if nargin < 2 || isempty(t)
