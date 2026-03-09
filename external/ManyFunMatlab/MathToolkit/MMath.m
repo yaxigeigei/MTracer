@@ -708,6 +708,37 @@ classdef MMath
             jointDist = jointDist / size(randVars,1);
         end
         
+        function [p, tbl, stats, epsilonSq] = KruskalWallisWithEffectSize(x, g, varargin)
+            % Wrapper for kruskalwallis that also calculates Epsilon-squared effect size
+            % 
+            %   [p, tbl, stats, epsilonSq] = KruskalWallisWithEffectSize(x, g, varargin)
+            % 
+            % Inputs
+            %   x           Data vector
+            %   g           Group labels
+            %   varargin    Additional arguments passed to kruskalwallis
+            % 
+            % Outputs
+            %   p           P-value from Kruskal-Wallis test
+            %   tbl         ANOVA table
+            %   stats       Statistics structure
+            %   epsilonSq   Epsilon-squared effect size
+            % 
+            % Epsilon-squared is calculated as:
+            %   ε² = (H - k + 1) / (n - k)
+            % where H is the Kruskal-Wallis H statistic, k is the number of groups, and n is total sample size
+            
+            [p, tbl, stats] = kruskalwallis(x, g, varargin{:});
+            
+            % Extract H, k, and n
+            H = tbl{2,5};           % Chi-sq statistic
+            k = numel(unique(g));   % number of groups
+            n = numel(x);           % total sample size
+
+            % Compute epsilon-squared
+            epsilonSq = (H - k + 1) / (n - k);
+        end
+        
         function [H, pValue, KSstatistic] = KStest2CDF(ecdf1, ecdf2, varargin)
             %KSTEST2 Two-sample Kolmogorov-Smirnov goodness-of-fit hypothesis test.
             
@@ -1019,6 +1050,37 @@ classdef MMath
             N = (A-c)./k;
         end
         
+        function [p, h, stats, r] = RanksumWithEffectSize(x, y, varargin)
+            % Wrapper for ranksum that also calculates Rank-Biserial Correlation effect size
+            % 
+            %   [p, h, stats, r] = RanksumWithEffectSize(x, y, varargin)
+            % 
+            % Inputs
+            %   x           First data vector
+            %   y           Second data vector
+            %   varargin    Additional arguments passed to ranksum
+            % 
+            % Outputs
+            %   p           P-value from ranksum test
+            %   h           Hypothesis test result (optional)
+            %   stats       Statistics structure (optional)
+            %   r           Rank-Biserial Correlation effect size (Cliff's δ)
+            % 
+            % The Rank-Biserial Correlation (Cliff's δ) is calculated as:
+            %   r = 1 - 2*U/(n1*n2)
+            % where U is the Mann-Whitney U statistic, n1 and n2 are sample sizes.
+            
+            % Call original ranksum with all possible outputs
+            [p, h, stats] = ranksum(x, y, varargin{:});
+            
+            % Calculate Rank-Biserial Correlation effect size
+            nx1 = numel(x);
+            nx2 = numel(y);
+            W = stats.ranksum;         % Wilcoxon W from ranksum
+            U = W - nx1*(nx1+1)/2;     % Mann-Whitney U
+            r = 1 - 2*U/(nx1*nx2);     % rank-biserial correlation (== Cliff's δ)
+        end
+
         function [r2, r2adj] = RSquared(X, y, b, c)
             % Compute R-squared and adjusted R-squared
             %
@@ -1094,6 +1156,50 @@ classdef MMath
             end
         end
         
+        function [p, h, stats, r] = SignrankWithEffectSize(x, varargin)
+            % Wrapper for signrank that also calculates Rank-Biserial Correlation effect size
+            % 
+            %   [p, h, stats, r] = SignrankWithEffectSize(x, varargin)
+            % 
+            % Inputs
+            %   x, varargin     Arguments passed to signrank.
+            % 
+            % Outputs
+            %   p               P-value from signrank test
+            %   h               Hypothesis test result
+            %   stats           Statistics structure
+            %   r               Rank-Biserial Correlation effect size
+            % 
+            % The Rank-Biserial Correlation is calculated using two methods:
+            % When zval is available, r = Z / sqrt(N) where Z is the z-statistic and N is the number of nonzero-difference pairs
+            % Otherwise, r = (2*Wp)/(N*(N+1)) - 1 where Wp is the sum of positive ranks and N is the number of nonzero-difference pairs
+            % 
+            % See also signrank
+
+            % Call original signrank with all possible outputs
+            [p, h, stats] = signrank(x, varargin{:});
+            
+            % Get the differences
+            if numel(varargin) > 1 && isnumeric(varargin{1})
+                y = varargin{1};
+                diffs = x - y;
+            else
+                diffs = x;
+            end
+            N = sum(diffs ~= 0 & ~isnan(diffs));
+
+            % Calculate Rank-Biserial Correlation effect size
+            if isfield(stats, 'zval')
+                % Based on z-statistic
+                Z = stats.zval;
+                r = Z / sqrt(N);
+            else
+                % Based on Wilcoxon W+ statistic
+                Wp = stats.signedrank; % Sum of positive ranks (Wilcoxon W+)
+                r = (2*Wp)/(N*(N+1)) - 1;
+            end
+        end
+
         function [aSorted, I] = SortLike(a, b, isVerbose)
             % Sort elements in 'a' like how they are ordered in 'b'
             %

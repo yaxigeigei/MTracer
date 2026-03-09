@@ -64,10 +64,11 @@ classdef MLing
             alignInfo.tscore = tscore;
         end
         
-        function [k1, k2, alignInfo] = FindAlignedTokens(s1, s2)
+        function [k1, k2, alignInfo] = FindAlignedTokens(s1, s2, varargin)
             % Globally align two sequences of tokens, and find pairs of corresponding ones.
             % 
             %   [k1, k2, alignInfo] = MLing.FindAlignedTokens(s1, s2)
+            %   [k1, k2, alignInfo] = MLing.FindAlignedTokens(s1, s2, <MLing.SeqAlign options>)
             % 
             % Inputs
             %   s1, s2          Two sequences of tokens (e.g. phonemes), each is a vector of string
@@ -85,7 +86,7 @@ classdef MLing
             % Global alignment
             s1 = string(s1);
             s2 = string(s2);
-            [aa, steps, tscore] = MLing.SeqAlign(s1, s2);
+            [aa, steps, tscore] = MLing.SeqAlign(s1, s2, varargin{:});
             
             % Get token indices
             tkInd = cumsum(steps, 2);

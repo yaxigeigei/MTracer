@@ -261,9 +261,13 @@ classdef MNeuro
                     error('%s (case-insensitive) is not a valid method', methodOpt);
             end
             
-            % Apply filtering
+            % Apply filtering (edge-normalized to avoid zero-padding attenuation)
+            ker = ker(:);
+            w = conv(ones(size(r,1),1), ker, 'same');
+            w(w < eps) = 1; % guard against division by zero
             for i = 1 : size(r,2)
-                r(:,i) = conv(r(:,i), ker, 'same');
+                y = conv(r(:,i), ker, 'same');
+                r(:,i) = y ./ w;
             end
             varargout{1} = ker;
         end

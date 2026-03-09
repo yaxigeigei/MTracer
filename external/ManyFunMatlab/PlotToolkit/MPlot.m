@@ -539,9 +539,9 @@ classdef MPlot
             
             switch journalStyle
                 case 'nature'
-                    widthSet = [8.9 12 18.3];
+                    widthSet = [9.0 18.0];
                 case 'cell'
-                    widthSet = [8.5 11.4 17.4];
+                    widthSet = [8.5 17.4];
             end
             
             % Resolve figure width
@@ -550,7 +550,7 @@ classdef MPlot
                 figWidth = widthSet(1) * colsWide;
                 
                 % % Overwrite if at specific #cols
-                % colOpts = [1 1.5 2];
+                % colOpts = [1 2];
                 % optIdx = colsWide == colOpts;
                 % if any(optIdx)
                 %     figWidth = widthSet(colsWide == colOpts);
