@@ -24,7 +24,11 @@ classdef MKilosort4
             % Derive additional fields
             ops.tstart = round(ops.tmin * ops.fs);
             if isinf(ops.tmax)
-                ops.tend = ops.tstart + size(mdat.Data.V, 2);
+                if isfield(ops, 'Nbatches') && isfield(ops, 'batch_size')
+                    ops.tend = ops.tstart + ops.Nbatches * ops.batch_size;
+                else
+                    error('Cannot infer ops.tend for infinite tmax from ops.npy');
+                end
             else
                 ops.tend = round(ops.tmax * ops.fs);
             end
