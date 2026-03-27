@@ -8,26 +8,20 @@ classdef Motion
         function tb = ResampleTraces(tb, t)
             % Resample traces over the time window
             
-            % Get times to resample at
+            % Make new time vector
             tAll = cat(1, tb.time{:});
             if nargin < 2 || isempty(t)
                 t = min(tAll) : 0.02 : max(tAll);
             end
             t = t(:);
             
-            % Resample using MSessionExplorer
-            se = MSessionExplorer();
-            se.SetTable('traces', tb, 'timeSeries');
-            dt = t(2) - t(1);
-            tEdges = [t-dt/2; t(end)+dt/2];
-            tb = se.ResampleTimeSeries('traces', tEdges);
+            % Resample
+            Y = cellfun(@(t0,y0) interp1(t0, y0, t, "makima", NaN), tb.time, tb.y, "UniformOutput", false);
             
             % Denest table by making all y's in a matrix
-            t = tb.time{1};
-            Y = cat(2, tb.y{:});
             tb = table;
             tb.time = t;
-            tb.Y = Y;
+            tb.Y = cat(2, Y{:});
         end
         
         function tbSeg = SegmentTraceCoverage(tb, allowGap)
@@ -84,23 +78,29 @@ classdef Motion
             F = griddedInterpolant(T, Y0, dY, 'makima');
         end
         
-        function [fFluc, fDrift] = FitAmpScaling(Y, fs, method)
+        function [fFluc, fDrift] = FitAmpScaling(Y, fs, interpMethod, driftMetric)
             % Fit two models that scale motion amplitude as a function of depth
             % 
-            %   [fFluc, fDrift] = FitAmpScaling(Y, fs, method)
+            %   [fFluc, fDrift] = FitAmpScaling(Y, fs)
+            %   [fFluc, fDrift] = FitAmpScaling(Y, fs, interpMethod)
+            %   [fFluc, fDrift] = FitAmpScaling(Y, fs, interpMethod, driftMetric)
             % 
             % Inputs
-            %   Y           A m-by-n matrix of depth coordinates. m is the number of time points. n is the number of traces.
-            %   fs          Sampling frequency in Hz.
-            %   method      Method of interpolation. Use 'makima' for nonlinear models and 'linear' for linear models.
+            %   Y               A m-by-n matrix of depth coordinates. m is the number of time points. n is the number of traces.
+            %   fs              Sampling frequency in Hz.
+            %   interpMethod    Method of interpolation. Use 'makima' for nonlinear models and 'linear' for linear models.
+            %   driftMetric     The metric for quantifying the size of drift. 'std' or 'minmax'.
             % Outputs
             %   fFluc       A griddedInterpolant object that maps the depth to the amplitude of fluctuation.
             %   fDrift      A griddedInterpolant object that maps the depth to the size of drift.
             % 
             % See also griddedInterpolant
             
-            if nargin < 3
-                method = 'makima';
+            if ~exist('driftMetric', 'var') || isempty(driftMetric)
+                driftMetric = 'std';
+            end
+            if ~exist('interpMethod', 'var') || isempty(interpMethod)
+                interpMethod = 'makima';
             end
             
             % Remove samples with incomplete set of Y values
@@ -120,21 +120,28 @@ classdef Motion
             
             % Fit fluctuation scaling
             ym = median(Y)';
-            sd = std(hpY)';
-            amp = MTracer.Motion.sd2ampFunc(sd);
-            if strcmp(method, 'linear')
+            sz = std(hpY)';
+            amp = MTracer.Motion.sd2ampFunc(sz);
+            if strcmp(interpMethod, 'linear')
                 fitObj = fit(ym, amp, 'poly1');
                 amp = fitObj(ym);
             end
             fFluc = griddedInterpolant(ym, amp, 'makima', 'linear');
             
             % Drift scaling
-            sd = std(resY)';
-            if strcmp(method, 'linear')
-                fitObj = fit(ym, sd, 'poly1');
-                sd = fitObj(ym);
+            switch lower(driftMetric)
+                case 'std'
+                    sz = std(resY)';
+                case 'minmax'
+                    sz = max(Y, [], 1)' - min(Y, [], 1)';
+                otherwise
+                    error("'%s' is not a valid driftMetric.", driftMetric);
             end
-            fDrift = griddedInterpolant(ym, sd, 'makima', 'linear');
+            if strcmp(interpMethod, 'linear')
+                fitObj = fit(ym, sz, 'poly1');
+                sz = fitObj(ym);
+            end
+            fDrift = griddedInterpolant(ym, sz, 'makima', 'linear');
         end
         
         function Ye = ExtrapolateTraces(Y, varargin)
