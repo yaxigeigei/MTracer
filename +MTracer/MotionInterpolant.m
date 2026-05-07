@@ -176,6 +176,7 @@ classdef MotionInterpolant
             %   t               A m-element vector of sample times in second
             %   y               A n-element vector of channel depths for V
             %   V               A m-by-n matrix of voltage data
+            %   'Group'         A n-element vector or n-by-p matrix of channel group labels
             %   'Highpass'      Whether or not to highpass filter the corrected voltage timeseries
             % Output
             %   Vk              A matrix of corrected voltage timeseries
@@ -183,27 +184,36 @@ classdef MotionInterpolant
             
             p = inputParser();
             p.addParameter('Highpass', false, @islogical);
+            p.addParameter('Group', [], @(x) true);
             p.parse(varargin{:});
             isHp = p.Results.Highpass;
+            group = p.Results.Group;
             
-            % Sort channels by depth
-            [y, indChan] = sort(y);
-            V = V(:,indChan);
-            
-            % Find the correct depth
-            t = t(:); % make t a column vector (not necessarily)
-            y = y(:)'; % ensure y is a row vector
-            Yk = this.CorrectDepths(t, y);
-            
-            % Interpolate voltage
-            Vk = zeros(size(V));
-            for i = 1 : size(V,1)
-                Vk(i,:) = interp1(Yk(i,:), V(i,:), y, 'makima', 0); % somehow this mapping works
+            % Group channels for independent depth interpolation
+            t = t(:);
+            y = y(:);
+            if isempty(group)
+                groupInd = ones(size(y));
+            else
+                if isvector(group)
+                    group = group(:);
+                end
+                [~, ~, groupInd] = unique(group, 'rows', 'stable');
             end
-            
-            % Restore original channel order
-            [~, yInd] = sort(indChan);
-            Vk = Vk(:, yInd);
+
+            % Interpolate voltage within each channel group
+            Vk = zeros(size(V));
+            for iG = 1 : max(groupInd)
+                chanInd = find(groupInd == iG);
+                [yg, indChan] = sort(y(chanInd));
+                chanInd = chanInd(indChan);
+                Vg = V(:,chanInd);
+                Yk = this.CorrectDepths(t, yg');
+                
+                for i = 1 : size(V,1)
+                    Vk(i,chanInd) = interp1(Yk(i,:), Vg(i,:), yg', 'makima', 0); % somehow this mapping works
+                end
+            end
             
             if isHp
                 % Prepare parameters for high-pass filtering
@@ -247,10 +257,11 @@ classdef MotionInterpolant
             function Vk = TransformRawData(obj, V, chanInd, iSample, fs)
                 t = double(iSample) / fs;
                 y = obj.channelMap.ycoords; % for the 384 mapped channels
+                group = [obj.channelMap.shankInd(:), obj.channelMap.xcoords(:), obj.channelMap.zcoords(:)];
                 V = double(V');
                 Vk = V;
                 isMapped = obj.channelMap.channelIdsMapped;
-                Vk(:,isMapped) = this.CorrectVoltArray(t, y, V(:,isMapped));
+                Vk(:,isMapped) = this.CorrectVoltArray(t, y, V(:,isMapped), 'Group', group);
                 Vk = Vk';
             end
         end
